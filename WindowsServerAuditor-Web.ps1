@@ -3,7 +3,7 @@
 # Platform: Windows 10/11, Windows Server 2008-2022+
 # Requires: PowerShell 5.0+
 # Usage: [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; iex (irm https://your-url/WindowsServerAuditor-Web.ps1)
-# Built: 2025-11-19 18:08:55
+# Built: 2025-12-04 13:02:09
 # Modules: 27 embedded modules in dependency order
 
 param(
@@ -3466,62 +3466,86 @@ function Get-SecuritySettings {
             foreach ($AV in $DetectedAV) {
                 $Details = "Detected via $($AV.DetectionMethod)"
                 $RiskLevel = "LOW"
+                $SkipFinding = $false
 
-                # Windows Defender specific details
+                # Windows Defender specific handling
                 if ($AV.Name -eq "Windows Defender") {
+                    # Windows Defender is baseline - only report if there's a problem
+                    $HasIssue = $false
+
                     if ($AV.RealTimeProtection -ne $null) {
                         $Details += ", Real-time protection: $($AV.RealTimeProtection)"
                         if (-not $AV.RealTimeProtection) {
-                            $RiskLevel = "HIGH"
+                            $RiskLevel = "MEDIUM"
+                            $HasIssue = $true
                         }
                     }
                     if ($AV.SignatureAge -ne $null) {
                         $Details += ", Signature age: $($AV.SignatureAge) days"
                         if ($AV.SignatureAge -gt 7) {
-                            $RiskLevel = "MEDIUM"
+                            $RiskLevel = "LOW"
+                            $HasIssue = $true
                         }
                     }
                     if ($AV.LastUpdate) {
                         $Details += ", Last update: $($AV.LastUpdate)"
                     }
+
+                    # Skip Windows Defender if working properly (baseline security)
+                    if (-not $HasIssue) {
+                        $SkipFinding = $true
+                        Write-LogMessage "DEBUG" "Windows Defender working normally - not reporting (baseline)" "SECURITY"
+                    }
+                }
+                else {
+                    # Third-party antivirus/antimalware - informational
+                    $RiskLevel = "INFO"
                 }
 
+                # Only create finding if not skipped
+                if (-not $SkipFinding) {
+                    $Results += [PSCustomObject]@{
+                        Category = "Security"
+                        Item = "Antivirus Product"
+                        Value = "$($AV.Name) - Active"
+                        Details = $Details
+                        RiskLevel = $RiskLevel
+                        Recommendation = ""
+                    }
+                }
+            }
+
+            # Check if third-party AV is present - if not, create HIGH risk finding
+            $ThirdPartyAV = $DetectedAV | Where-Object { $_.Name -ne "Windows Defender" }
+
+            if ($ThirdPartyAV.Count -eq 0) {
+                # No third-party AV - only Windows Defender (or nothing)
                 $Results += [PSCustomObject]@{
                     Category = "Security"
-                    Item = "Antivirus Product"
-                    Value = "$($AV.Name) - Active"
-                    Details = $Details
-                    RiskLevel = $RiskLevel
-                    Recommendation = ""
+                    Item = "Antivirus Protection"
+                    Value = "No enterprise antivirus detected"
+                    Details = "Only Windows Defender (baseline) is present. Enterprise environments should deploy third-party antivirus/antimalware solution."
+                    RiskLevel = "HIGH"
+                    Recommendation = "Deploy enterprise antivirus/antimalware solution (CrowdStrike, SentinelOne, Webroot, etc.)"
                 }
+
+                Write-LogMessage "WARN" "No third-party antivirus detected - only baseline Windows Defender" "SECURITY"
             }
-
-            # Summary
-            $DetectedNames = ($DetectedAV | Select-Object -ExpandProperty Name) -join ', '
-            $SummaryRisk = if ($DetectedAV.Count -gt 1) { "MEDIUM" } else { "LOW" }
-            $SummaryRecommendation = if ($DetectedAV.Count -gt 1) { "Multiple AV products may cause conflicts - review configuration" } else { "" }
-
-            $Results += [PSCustomObject]@{
-                Category = "Security"
-                Item = "Antivirus Protection Summary"
-                Value = "$($DetectedAV.Count) product(s) detected"
-                Details = "Active products: $DetectedNames"
-                RiskLevel = $SummaryRisk
-                Recommendation = $SummaryRecommendation
+            else {
+                Write-LogMessage "SUCCESS" "Third-party AV detected: $($ThirdPartyAV.Count) product(s)" "SECURITY"
             }
-
-            Write-LogMessage "SUCCESS" "AV detection: $($DetectedAV.Count) product(s) - $DetectedNames" "SECURITY"
         } else {
+            # No AV detected at all (not even Windows Defender)
             $Results += [PSCustomObject]@{
                 Category = "Security"
                 Item = "Antivirus Protection"
                 Value = "None detected"
-                Details = "No antivirus processes detected. Either no AV is installed or signatures need updating."
+                Details = "No antivirus/antimalware processes detected. Windows Defender may be disabled or unavailable."
                 RiskLevel = "HIGH"
-                Recommendation = "Install and configure antivirus protection"
+                Recommendation = "Enable Windows Defender or deploy enterprise antivirus/antimalware solution"
             }
 
-            Write-LogMessage "WARN" "No antivirus products detected" "SECURITY"
+            Write-LogMessage "WARN" "No antivirus/antimalware detected (not even Windows Defender)" "SECURITY"
         }
 
         # Add detected AV products to raw data collection
@@ -4814,12 +4838,12 @@ function Get-NetworkAnalysis {
                     Category = "Network"
                     Item = "Remote Desktop (RDP)"
                     Value = "Disabled"
-                    Details = "RDP is properly disabled"
+                    Details = "Port 3389 not listening"
                     RiskLevel = "LOW"
                     Recommendation = ""
                 }
-                
-                Write-LogMessage "INFO" "RDP is disabled - good security posture" "NETWORK"
+
+                Write-LogMessage "INFO" "RDP is disabled" "NETWORK"
             }
         }
         catch {
