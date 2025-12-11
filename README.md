@@ -26,11 +26,11 @@ sudo ./src/macOSWorkstationAuditor.sh
 ### Web Deployment
 ```bash
 # Windows
-iex (irm https://raw.githubusercontent.com/jroe-pulseone/BusinessNetworkAuditor/main/WindowsWorkstationAuditor-Web.ps1)
-iex (irm https://raw.githubusercontent.com/jroe-pulseone/BusinessNetworkAuditor/main/WindowsServerAuditor-Web.ps1)
+iex (irm https://raw.githubusercontent.com/pulseonetech/BusinessNetworkAuditor/main/WindowsWorkstationAuditor-Web.ps1)
+iex (irm https://raw.githubusercontent.com/pulseonetech/BusinessNetworkAuditor/main/WindowsServerAuditor-Web.ps1)
 
 # macOS
-curl -s https://raw.githubusercontent.com/jroe-pulseone/BusinessNetworkAuditor/main/macOSWorkstationAuditor-Web.sh | sudo bash
+curl -s https://raw.githubusercontent.com/pulseonetech/BusinessNetworkAuditor/main/macOSWorkstationAuditor-Web.sh | sudo bash
 ```
 
 ### Dark Web Breach Analysis
