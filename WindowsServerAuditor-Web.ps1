@@ -3,7 +3,7 @@
 # Platform: Windows 10/11, Windows Server 2008-2022+
 # Requires: PowerShell 5.0+
 # Usage: [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; iex (irm https://your-url/WindowsServerAuditor-Web.ps1)
-# Built: 2025-11-19 18:08:55
+# Built: 2025-12-05 20:30:40
 # Modules: 27 embedded modules in dependency order
 
 param(
@@ -6616,79 +6616,79 @@ function Get-ServerRoleAnalysis {
             Recommendation = ""
         }
         
-        # Analyze specific critical roles
+        # Analyze installed server roles
         $CriticalRoles = @{
             "AD-Domain-Services" = @{
                 Name = "Active Directory Domain Services"
-                Risk = "HIGH"
-                Description = "Domain Controller - Critical infrastructure component"
-                Recommendation = "Ensure proper backup, monitoring, and security hardening"
+                Risk = "INFO"
+                Description = "Domain Controller"
+                Recommendation = ""
             }
             "DHCP" = @{
                 Name = "DHCP Server"
-                Risk = "MEDIUM"
+                Risk = "INFO"
                 Description = "Network DHCP service"
-                Recommendation = "Monitor scope utilization and secure DHCP settings"
+                Recommendation = ""
             }
             "DNS" = @{
                 Name = "DNS Server"
-                Risk = "MEDIUM"
+                Risk = "INFO"
                 Description = "Domain Name System service"
-                Recommendation = "Secure DNS configuration and monitor for unauthorized changes"
+                Recommendation = ""
             }
             "Web-Server" = @{
                 Name = "Internet Information Services (IIS)"
-                Risk = "MEDIUM"
+                Risk = "INFO"
                 Description = "Web server role"
-                Recommendation = "Regular security updates and secure configuration required"
+                Recommendation = ""
             }
             "File-Services" = @{
                 Name = "File and Storage Services"
-                Risk = "MEDIUM"
+                Risk = "INFO"
                 Description = "File server capabilities"
-                Recommendation = "Monitor file share permissions and access logs"
+                Recommendation = ""
             }
             "Print-Services" = @{
                 Name = "Print and Document Services"
-                Risk = "LOW"
+                Risk = "INFO"
                 Description = "Print server capabilities"
-                Recommendation = "Review print server security and driver updates"
+                Recommendation = ""
             }
             "Remote-Desktop-Services" = @{
                 Name = "Remote Desktop Services"
-                Risk = "HIGH"
+                Risk = "INFO"
                 Description = "Terminal services and remote access"
-                Recommendation = "Secure RDS configuration and monitor remote access"
+                Recommendation = ""
             }
             "Hyper-V" = @{
                 Name = "Hyper-V"
-                Risk = "HIGH"
+                Risk = "INFO"
                 Description = "Virtualization platform"
-                Recommendation = "Secure hypervisor and monitor VM security"
+                Recommendation = ""
             }
             "ADCS-Cert-Authority" = @{
                 Name = "Active Directory Certificate Services"
-                Risk = "HIGH"
+                Risk = "INFO"
                 Description = "Certificate Authority services"
-                Recommendation = "Secure CA configuration and certificate management"
+                Recommendation = ""
             }
             "ADFS-Federation" = @{
                 Name = "Active Directory Federation Services"
-                Risk = "HIGH"
+                Risk = "INFO"
                 Description = "Identity federation services"
-                Recommendation = "Secure ADFS configuration and monitor authentication"
+                Recommendation = ""
             }
             "WDS" = @{
                 Name = "Windows Deployment Services"
-                Risk = "MEDIUM"
+                Risk = "INFO"
                 Description = "Network-based OS deployment"
-                Recommendation = "Secure WDS configuration and image management"
+                Recommendation = ""
             }
             "WSUS" = @{
                 Name = "Windows Server Update Services"
-                Risk = "MEDIUM"
+                Risk = "INFO"
                 Description = "Windows update distribution"
-                Recommendation = "Monitor update approval and distribution"
+                Recommendation = ""
             }
         }
         
@@ -6708,7 +6708,7 @@ function Get-ServerRoleAnalysis {
                 
                 $Results += [PSCustomObject]@{
                     Category = "Server Roles"
-                    Item = "Critical Role Detected"
+                    Item = "Server Role"
                     Value = $RoleInfo.Name
                     Details = "$($RoleInfo.Description). $ServiceDetails"
                     RiskLevel = $RoleInfo.Risk
