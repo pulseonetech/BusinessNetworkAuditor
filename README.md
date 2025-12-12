@@ -24,6 +24,8 @@ sudo ./src/macOSWorkstationAuditor.sh
 ```
 
 ### Web Deployment
+
+**Production (stable):**
 ```bash
 # Windows
 iex (irm https://raw.githubusercontent.com/pulseonetech/BusinessNetworkAuditor/main/WindowsWorkstationAuditor-Web.ps1)
@@ -31,6 +33,16 @@ iex (irm https://raw.githubusercontent.com/pulseonetech/BusinessNetworkAuditor/m
 
 # macOS
 curl -s https://raw.githubusercontent.com/pulseonetech/BusinessNetworkAuditor/main/macOSWorkstationAuditor-Web.sh | sudo bash
+```
+
+**Development (latest features, testing):**
+```bash
+# Windows
+iex (irm https://raw.githubusercontent.com/pulseonetech/BusinessNetworkAuditor/development/WindowsWorkstationAuditor-Web.ps1)
+iex (irm https://raw.githubusercontent.com/pulseonetech/BusinessNetworkAuditor/development/WindowsServerAuditor-Web.ps1)
+
+# macOS
+curl -s https://raw.githubusercontent.com/pulseonetech/BusinessNetworkAuditor/development/macOSWorkstationAuditor-Web.sh | sudo bash
 ```
 
 ### Dark Web Breach Analysis
