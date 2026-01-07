@@ -6,6 +6,11 @@ param(
     [Parameter(Mandatory=$false)]
     [string]$Domains,
 
+    [Parameter(Mandatory=$false)]
+    [string]$Emails,
+
+    [Parameter(Mandatory=$false)]
+    [string]$EmailList,
 
     [Parameter(Mandatory=$false)]
     [string]$OutputPath = ".\output",
@@ -15,7 +20,6 @@ param(
 
     [Parameter(Mandatory=$false)]
     [switch]$DetailedLogging,
-
 
     [Parameter(Mandatory=$false)]
     [switch]$Help,
@@ -28,20 +32,27 @@ param(
 if ($Help) {
     Write-Host @"
 
-Dark Web Checker - Domain Breach Analysis Tool
-===============================================
+Dark Web Checker - Domain and Email Breach Analysis Tool
+=========================================================
 
 DESCRIPTION:
-    Checks email domains for compromised accounts and data breaches.
+    Checks email domains or specific email addresses for compromised accounts and data breaches.
     Identifies breached accounts, sources, and provides risk assessment.
+
+SCANNING METHODS:
+    Domain-Based: Requires domain ownership verification (dashboard setup)
+    Email-Based:  No verification required, works with any email addresses (API key needed)
 
 USAGE:
     .\DarkWebChecker.ps1 -Domains "company.com,subsidiary.org"
-    .\DarkWebChecker.ps1                                     (prompts for domains)
-    .\DarkWebChecker.ps1 -Domains "company.com" -ExportJson
+    .\DarkWebChecker.ps1 -Emails "user1@company.com,user2@company.com"
+    .\DarkWebChecker.ps1 -EmailList "emails.txt"
+    .\DarkWebChecker.ps1                                     (prompts for input)
 
 PARAMETERS:
-    -Domains        Comma-separated list of email domains to check (optional - will prompt if not provided)
+    -Domains        Comma-separated list of email domains to check
+    -Emails         Comma-separated list of email addresses to check
+    -EmailList      Path to text file with email addresses (one per line, no header)
     -OutputPath     Directory for output files (default: .\output)
     -ConfigPath     Path to breach database API configuration file
     -DetailedLogging Enable detailed logging
@@ -49,20 +60,24 @@ PARAMETERS:
     -Help           Show this help message
 
 SETUP OPTIONS:
-    Option A - Full API Access (Recommended):
+    Option A - Full API Access (Recommended for Email Scanning):
     1. Copy config\hibp-api-config.example.json to config\hibp-api-config.json
     2. Add your paid API key to the configuration file
     3. Ensure internet connectivity for API calls
 
-    Option B - Basic Access (Free):
+    Option B - Basic Access (Free - Domain Scanning Only):
     1. No configuration required
     2. Uses subscription-free breach data only (limited results)
     3. Ensure internet connectivity for API calls
 
 EXAMPLES:
-    .\DarkWebChecker.ps1 -Domains "acme.com"                 (basic free mode)
-    .\DarkWebChecker.ps1 -DetailedLogging                    (will prompt for domains)
-    .\DarkWebChecker.ps1 -Domains "test.com" -DemoMode       (offline test mode)
+    Domain scanning:
+    .\DarkWebChecker.ps1 -Domains "acme.com"
+
+    Email scanning:
+    .\DarkWebChecker.ps1 -Emails "admin@acme.com,support@acme.com"
+    .\DarkWebChecker.ps1 -EmailList "C:\emails.txt"
+    .\DarkWebChecker.ps1 -Emails "test@example.com" -DemoMode
 
 "@ -ForegroundColor Cyan
     exit 0
@@ -134,26 +149,72 @@ Start Time: $($Script:StartTime.ToString('yyyy-MM-dd HH:mm:ss'))
 "@ -ForegroundColor Green
 
 try {
-    # Get domains from parameter or prompt user
-    if (-not $Domains) {
-        Write-Host "No domains specified. Please enter the email domains to check for breaches." -ForegroundColor Yellow
-        Write-Host "Enter domains separated by commas (e.g., company.com, subsidiary.org):" -ForegroundColor Cyan
-        $Domains = Read-Host "Domains"
+    # Validate that at least one scanning method is specified
+    $HasDomains = -not [string]::IsNullOrWhiteSpace($Domains)
+    $HasEmails = -not [string]::IsNullOrWhiteSpace($Emails)
+    $HasEmailList = -not [string]::IsNullOrWhiteSpace($EmailList)
 
-        if (-not $Domains) {
-            Write-Host "No domains provided. Exiting." -ForegroundColor Red
+    # If nothing specified, prompt user
+    if (-not $HasDomains -and -not $HasEmails -and -not $HasEmailList) {
+        Write-Host "No scanning target specified. Please choose a scanning method:" -ForegroundColor Yellow
+        Write-Host "  1. Domain-based scanning (requires domain ownership verification)" -ForegroundColor Cyan
+        Write-Host "  2. Email-based scanning (requires API key, no verification)" -ForegroundColor Cyan
+        $Choice = Read-Host "Enter choice (1 or 2)"
+
+        if ($Choice -eq "1") {
+            Write-Host "`nEnter domains separated by commas (e.g., company.com, subsidiary.org):" -ForegroundColor Cyan
+            $Domains = Read-Host "Domains"
+            if ([string]::IsNullOrWhiteSpace($Domains)) {
+                Write-Host "No domains provided. Exiting." -ForegroundColor Red
+                exit 1
+            }
+            $HasDomains = $true
+        } elseif ($Choice -eq "2") {
+            Write-Host "`nEnter email addresses separated by commas, or path to email list file:" -ForegroundColor Cyan
+            $Input = Read-Host "Emails or file path"
+            if ([string]::IsNullOrWhiteSpace($Input)) {
+                Write-Host "No input provided. Exiting." -ForegroundColor Red
+                exit 1
+            }
+            # Check if input is a file path
+            if (Test-Path $Input) {
+                $EmailList = $Input
+                $HasEmailList = $true
+            } else {
+                $Emails = $Input
+                $HasEmails = $true
+            }
+        } else {
+            Write-Host "Invalid choice. Exiting." -ForegroundColor Red
             exit 1
         }
     }
 
-    Write-Host "Checking domains: $Domains" -ForegroundColor Green
-
-    # Execute the dark web analysis
-    if ($DemoMode) {
-        Write-Host "`n[DEMO MODE] Running with simulated data - no API calls will be made" -ForegroundColor Magenta
-        $Results = Get-DarkWebAnalysis -Domains $Domains -ConfigPath $ConfigPath -DemoMode
-    } else {
-        $Results = Get-DarkWebAnalysis -Domains $Domains -ConfigPath $ConfigPath
+    # Execute the appropriate dark web analysis
+    if ($HasDomains) {
+        Write-Host "Checking domains: $Domains" -ForegroundColor Green
+        if ($DemoMode) {
+            Write-Host "`n[DEMO MODE] Running with simulated data - no API calls will be made" -ForegroundColor Magenta
+            $Results = Get-DarkWebAnalysis -Domains $Domains -ConfigPath $ConfigPath -DemoMode
+        } else {
+            $Results = Get-DarkWebAnalysis -Domains $Domains -ConfigPath $ConfigPath
+        }
+    } elseif ($HasEmails) {
+        Write-Host "Checking email addresses: $Emails" -ForegroundColor Green
+        if ($DemoMode) {
+            Write-Host "`n[DEMO MODE] Running with simulated data - no API calls will be made" -ForegroundColor Magenta
+            $Results = Get-DarkWebAnalysis -EmailAddresses $Emails -ConfigPath $ConfigPath -DemoMode
+        } else {
+            $Results = Get-DarkWebAnalysis -EmailAddresses $Emails -ConfigPath $ConfigPath
+        }
+    } elseif ($HasEmailList) {
+        Write-Host "Loading email addresses from file: $EmailList" -ForegroundColor Green
+        if ($DemoMode) {
+            Write-Host "`n[DEMO MODE] Running with simulated data - no API calls will be made" -ForegroundColor Magenta
+            $Results = Get-DarkWebAnalysis -EmailListPath $EmailList -ConfigPath $ConfigPath -DemoMode
+        } else {
+            $Results = Get-DarkWebAnalysis -EmailListPath $EmailList -ConfigPath $ConfigPath
+        }
     }
 
     if ($Results.Count -eq 0) {
@@ -167,7 +228,7 @@ try {
     Write-Host "========================================" -ForegroundColor Cyan
 
     $BreachCount = 0
-    $CleanDomains = 0
+    $CleanCount = 0
     $ErrorCount = 0
 
     foreach ($Result in $Results) {
@@ -185,10 +246,10 @@ try {
         Write-Host "  Recommendation: $($Result.Recommendation)" -ForegroundColor Gray
 
         # Count result types
-        if ($Result.Item -like "*Domain Breach*") {
+        if ($Result.Item -like "*Breach*" -and $Result.Item -notlike "*Breach Details*") {
             $BreachCount++
-        } elseif ($Result.Value -like "*Clean*") {
-            $CleanDomains++
+        } elseif ($Result.Item -like "*Status" -and $Result.Value -like "*Clean*") {
+            $CleanCount++
         } elseif ($Result.Value -like "*Error*" -or $Result.Value -like "*Exception*") {
             $ErrorCount++
         }
@@ -199,7 +260,7 @@ try {
     Write-Host "SUMMARY" -ForegroundColor Cyan
     Write-Host "========================================" -ForegroundColor Cyan
     Write-Host "Breaches Found: $BreachCount" -ForegroundColor $(if ($BreachCount -gt 0) { "Red" } else { "Green" })
-    Write-Host "Clean Domains: $CleanDomains" -ForegroundColor Green
+    Write-Host "Clean: $CleanCount" -ForegroundColor Green
     Write-Host "Errors: $ErrorCount" -ForegroundColor $(if ($ErrorCount -gt 0) { "Yellow" } else { "Green" })
     Write-Host "Total Results: $($Results.Count)" -ForegroundColor Cyan
 
@@ -208,11 +269,22 @@ try {
 
     # Export JSON
     $JsonFile = Join-Path $OutputDirectory "$BaseFileName.json"
+
+    # Determine scan method
+    $ScanMethod = if ($HasDomains) {
+        "domain"
+    } elseif ($HasEmails -or $HasEmailList) {
+        "email"
+    } else {
+        "unknown"
+    }
+
     $ExportData = @{
         CheckDate = $Script:StartTime.ToString('yyyy-MM-dd HH:mm:ss')
+        ScanMethod = $ScanMethod
         Summary = @{
             BreachesFound = $BreachCount
-            CleanDomains = $CleanDomains
+            Clean = $CleanCount
             Errors = $ErrorCount
             TotalResults = $Results.Count
         }
@@ -241,7 +313,7 @@ try {
         Write-Host "WARNING: Some errors occurred during check." -ForegroundColor Yellow
         exit 3  # Exit code 3 indicates errors occurred
     } else {
-        Write-Host "All domains clean - no breaches detected." -ForegroundColor Green
+        Write-Host "Scan complete - no breaches detected." -ForegroundColor Green
         exit 0  # Success
     }
 }

@@ -4,15 +4,20 @@
 function Get-DarkWebAnalysis {
     <#
     .SYNOPSIS
-        Analyzes email domains for exposed credentials using breach database API
+        Analyzes email domains or addresses for exposed credentials using breach database API
 
     .DESCRIPTION
-        Scans specified email domains for compromised accounts using breach database API.
+        Scans specified email domains or individual email addresses for compromised accounts using breach database API.
         Identifies breached accounts, breach sources, and dates to assess organizational exposure.
 
     .PARAMETER Domains
         Comma-separated list of email domains to check (e.g., "company.com,subsidiary.org")
 
+    .PARAMETER EmailAddresses
+        Comma-separated list of email addresses to check (e.g., "user1@company.com,user2@company.com")
+
+    .PARAMETER EmailListPath
+        Path to text file containing email addresses (one per line, no header)
 
     .PARAMETER ConfigPath
         Path to breach database API configuration file (default: .\config\hibp-api-config.json)
@@ -21,13 +26,15 @@ function Get-DarkWebAnalysis {
         Array of PSCustomObjects with Category, Item, Value, Details, RiskLevel, Recommendation
 
     .NOTES
-        Requires: Write-LogMessage function, valid breach database API key
+        Requires: Write-LogMessage function, valid breach database API key (for email scanning)
         Dependencies: Internet connectivity, breach database API access
         Rate Limits: Respects API rate limiting with automatic retry
     #>
 
     param(
         [string]$Domains,
+        [string]$EmailAddresses,
+        [string]$EmailListPath,
         [string]$ConfigPath = ".\config\hibp-api-config.json",
         [switch]$DemoMode
     )
@@ -37,15 +44,20 @@ function Get-DarkWebAnalysis {
     try {
         $Results = @()
 
+        # Determine scanning method
+        $HasDomains = -not [string]::IsNullOrWhiteSpace($Domains)
+        $HasEmailAddresses = -not [string]::IsNullOrWhiteSpace($EmailAddresses)
+        $HasEmailListPath = -not [string]::IsNullOrWhiteSpace($EmailListPath)
+
         # Validate input parameters
-        if (-not $Domains) {
+        if (-not $HasDomains -and -not $HasEmailAddresses -and -not $HasEmailListPath) {
             $Results += [PSCustomObject]@{
                 Category = "Dark Web Analysis"
                 Item = "Parameter Validation"
                 Value = "ERROR"
-                Details = "No domains specified. Use -Domains parameter."
+                Details = "No scanning target specified. Use -Domains, -EmailAddresses, or -EmailListPath parameter."
                 RiskLevel = "INFO"
-                Recommendation = "Specify email domains to check for breaches"
+                Recommendation = "Specify email domains or addresses to check for breaches"
             }
             return $Results
         }
@@ -104,127 +116,262 @@ function Get-DarkWebAnalysis {
             }
         }
 
-        # Parse domains from parameter
-        $DomainsToCheck = @()
-
-        if ($Domains) {
+        # Determine what to scan
+        if ($HasDomains) {
+            # Domain-based scanning
+            $DomainsToCheck = @()
             $DomainsToCheck += $Domains -split "," | ForEach-Object { $_.Trim() }
-        }
 
-        if ($DomainsToCheck.Count -eq 0) {
-            $Results += [PSCustomObject]@{
-                Category = "Dark Web Analysis"
-                Item = "Domain List"
-                Value = "ERROR"
-                Details = "No valid domains found to check"
-                RiskLevel = "INFO"
-                Recommendation = "Verify domain list contains valid email domains"
-            }
-            return $Results
-        }
-
-        Write-LogMessage "INFO" "Checking $($DomainsToCheck.Count) domain(s) for breaches" "DARKWEB"
-
-        # Process each domain
-        foreach ($Domain in $DomainsToCheck) {
-            Write-LogMessage "INFO" "Analyzing domain: $Domain" "DARKWEB"
-
-            try {
-                # Check domain breaches using breach database API or generate demo data
-                if ($DemoMode) {
-                    $BreachData = Get-DemoBreachData -Domain $Domain
-                } elseif ($Config.hibp.subscription_free_mode) {
-                    $BreachData = Invoke-SubscriptionFreeCheck -Domain $Domain -Config $Config
-                } else {
-                    $BreachData = Invoke-HIBPDomainCheck -Domain $Domain -Config $Config
+            if ($DomainsToCheck.Count -eq 0) {
+                $Results += [PSCustomObject]@{
+                    Category = "Dark Web Analysis"
+                    Item = "Domain List"
+                    Value = "ERROR"
+                    Details = "No valid domains found to check"
+                    RiskLevel = "INFO"
+                    Recommendation = "Verify domain list contains valid email domains"
                 }
+                return $Results
+            }
 
-                if ($BreachData.Success) {
-                    # Process subscription-free breaches with full details
-                    if ($BreachData.Breaches.Count -gt 0) {
-                        foreach ($Breach in $BreachData.Breaches) {
-                            $RiskLevel = Get-BreachRiskLevel -BreachDate $Breach.BreachDate -RecentThresholdDays $Config.hibp.recent_breach_threshold_days
+            Write-LogMessage "INFO" "Checking $($DomainsToCheck.Count) domain(s) for breaches" "DARKWEB"
 
-                            $Results += [PSCustomObject]@{
-                                Category = "Dark Web Analysis"
-                                Item = "Domain Breach (Full Details)"
-                                Value = "$Domain - $($Breach.Name)"
-                                Details = "Breach Date: $($Breach.BreachDate), Accounts: $($Breach.PwnCount), Data: $($Breach.DataClasses -join ', ')"
-                                RiskLevel = $RiskLevel
-                                Recommendation = if ($RiskLevel -eq "HIGH") { "Recent breach detected - immediate password reset required for all domain accounts" } else { "Historical breach detected - verify users have updated passwords since breach date" }
-                            }
-                        }
+            # Process each domain
+            foreach ($Domain in $DomainsToCheck) {
+                Write-LogMessage "INFO" "Analyzing domain: $Domain" "DARKWEB"
+
+                try {
+                    # Check domain breaches using breach database API or generate demo data
+                    if ($DemoMode) {
+                        $BreachData = Get-DemoBreachData -Domain $Domain
+                    } elseif ($Config.hibp.subscription_free_mode) {
+                        $BreachData = Invoke-SubscriptionFreeCheck -Domain $Domain -Config $Config
+                    } else {
+                        $BreachData = Invoke-HIBPDomainCheck -Domain $Domain -Config $Config
                     }
 
-                    # Process limited breaches (metadata only)
-                    if ($BreachData.LimitedBreaches -and $BreachData.LimitedBreaches.Count -gt 0) {
-                        foreach ($Breach in $BreachData.LimitedBreaches) {
-                            $RiskLevel = Get-BreachRiskLevel -BreachDate $Breach.BreachDate -RecentThresholdDays $Config.hibp.recent_breach_threshold_days
+                    if ($BreachData.Success) {
+                        # Process subscription-free breaches with full details
+                        if ($BreachData.Breaches.Count -gt 0) {
+                            foreach ($Breach in $BreachData.Breaches) {
+                                $RiskLevel = Get-BreachRiskLevel -BreachDate $Breach.BreachDate -RecentThresholdDays $Config.hibp.recent_breach_threshold_days
 
-                            $Results += [PSCustomObject]@{
-                                Category = "Dark Web Analysis"
-                                Item = "Domain Breach (Limited Info)"
-                                Value = "$Domain - $($Breach.Name)"
-                                Details = "Breach Date: $($Breach.BreachDate), Accounts: $($Breach.PwnCount), Data: $($Breach.DataClasses -join ', ') [Account details require paid API]"
-                                RiskLevel = $RiskLevel
-                                Recommendation = if ($RiskLevel -eq "HIGH") { "Recent breach detected - configure paid API key for detailed account analysis" } else { "Historical breach detected - configure paid API key for detailed account analysis" }
+                                $Results += [PSCustomObject]@{
+                                    Category = "Dark Web Analysis"
+                                    Item = "Domain Breach (Full Details)"
+                                    Value = "$Domain - $($Breach.Name)"
+                                    Details = "Breach Date: $($Breach.BreachDate), Accounts: $($Breach.PwnCount), Data: $($Breach.DataClasses -join ', ')"
+                                    RiskLevel = $RiskLevel
+                                    Recommendation = if ($RiskLevel -eq "HIGH") { "Recent breach detected - immediate password reset required for all domain accounts" } else { "Historical breach detected - verify users have updated passwords since breach date" }
+                                }
                             }
                         }
-                    }
 
-                    # If no breaches found at all
-                    if ($BreachData.Breaches.Count -eq 0 -and ($BreachData.LimitedBreaches.Count -eq 0 -or -not $BreachData.LimitedBreaches)) {
+                        # Process limited breaches (metadata only)
+                        if ($BreachData.LimitedBreaches -and $BreachData.LimitedBreaches.Count -gt 0) {
+                            foreach ($Breach in $BreachData.LimitedBreaches) {
+                                $RiskLevel = Get-BreachRiskLevel -BreachDate $Breach.BreachDate -RecentThresholdDays $Config.hibp.recent_breach_threshold_days
+
+                                $Results += [PSCustomObject]@{
+                                    Category = "Dark Web Analysis"
+                                    Item = "Domain Breach (Limited Info)"
+                                    Value = "$Domain - $($Breach.Name)"
+                                    Details = "Breach Date: $($Breach.BreachDate), Accounts: $($Breach.PwnCount), Data: $($Breach.DataClasses -join ', ') [Account details require paid API]"
+                                    RiskLevel = $RiskLevel
+                                    Recommendation = if ($RiskLevel -eq "HIGH") { "Recent breach detected - configure paid API key for detailed account analysis" } else { "Historical breach detected - configure paid API key for detailed account analysis" }
+                                }
+                            }
+                        }
+
+                        # If no breaches found at all
+                        if ($BreachData.Breaches.Count -eq 0 -and ($BreachData.LimitedBreaches.Count -eq 0 -or -not $BreachData.LimitedBreaches)) {
+                            $Results += [PSCustomObject]@{
+                                Category = "Dark Web Analysis"
+                                Item = "Domain Status"
+                                Value = "$Domain - Clean"
+                                Details = "No known breaches found for this domain"
+                                RiskLevel = "INFO"
+                                Recommendation = "Continue monitoring domain for future breaches"
+                            }
+                        }
+                    } else {
                         $Results += [PSCustomObject]@{
                             Category = "Dark Web Analysis"
-                            Item = "Domain Status"
-                            Value = "$Domain - Clean"
-                            Details = "No known breaches found for this domain"
+                            Item = "Domain Check"
+                            Value = "$Domain - Error"
+                            Details = $BreachData.Error
                             RiskLevel = "INFO"
-                            Recommendation = "Continue monitoring domain for future breaches"
+                            Recommendation = "Verify domain name and API connectivity"
                         }
                     }
-                } else {
+
+                    # Add a note if using subscription-free mode
+                    if ($Config.hibp.subscription_free_mode -and $BreachData.Note) {
+                        $Results += [PSCustomObject]@{
+                            Category = "Dark Web Analysis"
+                            Item = "Data Source"
+                            Value = "Subscription-Free Mode"
+                            Details = $BreachData.Note
+                            RiskLevel = "INFO"
+                            Recommendation = "For comprehensive domain-specific breach data, configure a paid API key"
+                        }
+                    }
+
+                    # Rate limiting delay
+                    if ($Config.hibp.rate_limit_delay_ms -gt 0) {
+                        Start-Sleep -Milliseconds $Config.hibp.rate_limit_delay_ms
+                    }
+                }
+                catch {
+                    Write-LogMessage "ERROR" "Failed to check domain $Domain`: $($_.Exception.Message)" "DARKWEB"
                     $Results += [PSCustomObject]@{
                         Category = "Dark Web Analysis"
                         Item = "Domain Check"
-                        Value = "$Domain - Error"
-                        Details = $BreachData.Error
+                        Value = "$Domain - Exception"
+                        Details = $_.Exception.Message
                         RiskLevel = "INFO"
-                        Recommendation = "Verify domain name and API connectivity"
+                        Recommendation = "Check network connectivity and API configuration"
                     }
-                }
-
-                # Add a note if using subscription-free mode
-                if ($Config.hibp.subscription_free_mode -and $BreachData.Note) {
-                    $Results += [PSCustomObject]@{
-                        Category = "Dark Web Analysis"
-                        Item = "Data Source"
-                        Value = "Subscription-Free Mode"
-                        Details = $BreachData.Note
-                        RiskLevel = "INFO"
-                        Recommendation = "For comprehensive domain-specific breach data, configure a paid API key"
-                    }
-                }
-
-                # Rate limiting delay
-                if ($Config.hibp.rate_limit_delay_ms -gt 0) {
-                    Start-Sleep -Milliseconds $Config.hibp.rate_limit_delay_ms
                 }
             }
-            catch {
-                Write-LogMessage "ERROR" "Failed to check domain $Domain`: $($_.Exception.Message)" "DARKWEB"
+
+            Write-LogMessage "SUCCESS" "Completed dark web analysis for $($DomainsToCheck.Count) domain(s)" "DARKWEB"
+
+        } elseif ($HasEmailAddresses -or $HasEmailListPath) {
+            # Email-based scanning
+            $EmailsToCheck = @()
+
+            # Parse emails from comma-separated parameter
+            if ($HasEmailAddresses) {
+                $EmailsToCheck += $EmailAddresses -split "," | ForEach-Object { $_.Trim() }
+            }
+
+            # Load emails from file
+            if ($HasEmailListPath) {
+                $EmailsToCheck += Import-EmailListFromFile -FilePath $EmailListPath
+            }
+
+            if ($EmailsToCheck.Count -eq 0) {
                 $Results += [PSCustomObject]@{
                     Category = "Dark Web Analysis"
-                    Item = "Domain Check"
-                    Value = "$Domain - Exception"
-                    Details = $_.Exception.Message
+                    Item = "Email List"
+                    Value = "ERROR"
+                    Details = "No valid email addresses found to check"
                     RiskLevel = "INFO"
-                    Recommendation = "Check network connectivity and API configuration"
+                    Recommendation = "Verify email list contains valid email addresses"
+                }
+                return $Results
+            }
+
+            Write-LogMessage "INFO" "Checking $($EmailsToCheck.Count) email address(es) for breaches" "DARKWEB"
+
+            # Process each email with progress tracking
+            $ProcessedCount = 0
+            $BreachedCount = 0
+            $CleanCount = 0
+
+            foreach ($Email in $EmailsToCheck) {
+                $ProcessedCount++
+                $ProgressPercent = [math]::Round(($ProcessedCount / $EmailsToCheck.Count) * 100, 1)
+
+                Write-LogMessage "INFO" "[$ProcessedCount/$($EmailsToCheck.Count) - $ProgressPercent%] Checking: $Email" "DARKWEB"
+
+                try {
+                    # Check email breaches using breach database API or generate demo data
+                    if ($DemoMode) {
+                        $BreachData = Get-DemoBreachData -Domain $Email
+                    } else {
+                        # Email scanning requires API key
+                        if ($Config.hibp.subscription_free_mode) {
+                            Write-LogMessage "ERROR" "Email scanning requires a paid API key" "DARKWEB"
+                            $Results += [PSCustomObject]@{
+                                Category = "Dark Web Analysis"
+                                Item = "Configuration Error"
+                                Value = "API Key Required"
+                                Details = "Email-based scanning requires a paid HIBP API key. Domain scanning does not."
+                                RiskLevel = "INFO"
+                                Recommendation = "Configure a paid API key in $ConfigPath or use domain-based scanning"
+                            }
+                            return $Results
+                        }
+                        $BreachData = Invoke-HIBPEmailCheck -EmailAddress $Email -Config $Config
+                    }
+
+                    if ($BreachData.Success) {
+                        if ($BreachData.Breaches.Count -gt 0) {
+                            $BreachedCount++
+
+                            # Add summary finding for this email
+                            $BreachNames = ($BreachData.Breaches | ForEach-Object { $_.Name }) -join ", "
+                            $MostRecentBreach = ($BreachData.Breaches | Sort-Object BreachDate -Descending | Select-Object -First 1)
+                            $RiskLevel = Get-BreachRiskLevel -BreachDate $MostRecentBreach.BreachDate -RecentThresholdDays $Config.hibp.recent_breach_threshold_days
+
+                            $Results += [PSCustomObject]@{
+                                Category = "Dark Web Analysis"
+                                Item = "Email Breach"
+                                Value = $Email
+                                Details = "$($BreachData.Breaches.Count) breach(es) found: $BreachNames"
+                                RiskLevel = $RiskLevel
+                                Recommendation = if ($RiskLevel -eq "HIGH") { "Immediate password reset required - recent breach detected" } else { "Verify password has been changed since breach date" }
+                            }
+
+                            # Add detailed findings for each breach
+                            foreach ($Breach in $BreachData.Breaches) {
+                                $BreachRiskLevel = Get-BreachRiskLevel -BreachDate $Breach.BreachDate -RecentThresholdDays $Config.hibp.recent_breach_threshold_days
+                                $DataTypes = if ($Breach.DataClasses) { $Breach.DataClasses -join ", " } else { "Unknown" }
+
+                                $Results += [PSCustomObject]@{
+                                    Category = "Dark Web Analysis"
+                                    Item = "Breach Details - $($Breach.Name)"
+                                    Value = $Email
+                                    Details = "Date: $($Breach.BreachDate), Affected Accounts: $($Breach.PwnCount), Compromised Data: $DataTypes"
+                                    RiskLevel = $BreachRiskLevel
+                                    Recommendation = "Review breach details at haveibeenpwned.com and take appropriate action"
+                                }
+                            }
+                        } else {
+                            $CleanCount++
+                            $Results += [PSCustomObject]@{
+                                Category = "Dark Web Analysis"
+                                Item = "Email Status"
+                                Value = "$Email - Clean"
+                                Details = "No known breaches found for this email address"
+                                RiskLevel = "INFO"
+                                Recommendation = "Continue monitoring for future breaches"
+                            }
+                        }
+                    } else {
+                        $Results += [PSCustomObject]@{
+                            Category = "Dark Web Analysis"
+                            Item = "Email Check"
+                            Value = "$Email - Error"
+                            Details = $BreachData.Error
+                            RiskLevel = "INFO"
+                            Recommendation = "Verify email format and API connectivity"
+                        }
+                    }
+
+                    # Rate limiting delay
+                    if ($Config.hibp.rate_limit_delay_ms -gt 0) {
+                        Start-Sleep -Milliseconds $Config.hibp.rate_limit_delay_ms
+                    }
+                }
+                catch {
+                    Write-LogMessage "ERROR" "Failed to check email $Email`: $($_.Exception.Message)" "DARKWEB"
+                    $Results += [PSCustomObject]@{
+                        Category = "Dark Web Analysis"
+                        Item = "Email Check"
+                        Value = "$Email - Exception"
+                        Details = $_.Exception.Message
+                        RiskLevel = "INFO"
+                        Recommendation = "Check network connectivity and API configuration"
+                    }
                 }
             }
+
+            Write-LogMessage "SUCCESS" "Completed dark web analysis for $($EmailsToCheck.Count) email(s): $BreachedCount breached, $CleanCount clean" "DARKWEB"
         }
 
-        Write-LogMessage "SUCCESS" "Completed dark web analysis for $($DomainsToCheck.Count) domain(s)" "DARKWEB"
         return $Results
     }
     catch {
@@ -327,6 +474,100 @@ function Invoke-HIBPDomainCheck {
     }
 }
 
+function Invoke-HIBPEmailCheck {
+    <#
+    .SYNOPSIS
+        Calls HIBP API to check for breaches associated with a specific email address
+    #>
+    param(
+        [string]$EmailAddress,
+        [object]$Config
+    )
+
+    try {
+        $Headers = @{
+            "hibp-api-key" = $Config.hibp.api_key
+            "User-Agent" = "BusinessNetworkAuditor/1.0"
+        }
+
+        # URL encode the email address
+        $EncodedEmail = [System.Web.HttpUtility]::UrlEncode($EmailAddress)
+        $Uri = "$($Config.hibp.base_url)/breachedaccount/$EncodedEmail"
+
+        # Add query parameters
+        $QueryParams = @()
+        $QueryParams += "truncateResponse=false"
+
+        if ($Config.settings -and -not $Config.settings.include_unverified_breaches) {
+            $QueryParams += "includeUnverified=false"
+        } else {
+            $QueryParams += "includeUnverified=false"
+        }
+
+        if ($QueryParams.Count -gt 0) {
+            $Uri += "?" + ($QueryParams -join "&")
+        }
+
+        $RetryCount = 0
+        $MaxRetries = if ($Config.hibp.max_retries) { $Config.hibp.max_retries } else { 3 }
+
+        do {
+            try {
+                $Response = Invoke-RestMethod -Uri $Uri -Headers $Headers -Method Get -ErrorAction Stop
+
+                return @{
+                    Success = $true
+                    Breaches = $Response
+                    Error = $null
+                }
+            }
+            catch {
+                if ($_.Exception.Response.StatusCode -eq 429) {
+                    # Rate limited
+                    $RetryAfter = if ($_.Exception.Response.Headers["Retry-After"]) {
+                        [int]$_.Exception.Response.Headers["Retry-After"] * 1000
+                    } else {
+                        if ($Config.hibp.rate_limit_delay_ms) {
+                            $Config.hibp.rate_limit_delay_ms * 2
+                        } else {
+                            4000
+                        }
+                    }
+
+                    Write-LogMessage "WARN" "Rate limited on $EmailAddress, waiting $($RetryAfter)ms before retry" "DARKWEB"
+                    Start-Sleep -Milliseconds $RetryAfter
+                    $RetryCount++
+                }
+                elseif ($_.Exception.Response.StatusCode -eq 404) {
+                    # No breaches found (this is success)
+                    return @{
+                        Success = $true
+                        Breaches = @()
+                        Error = $null
+                    }
+                }
+                else {
+                    throw
+                }
+            }
+        } while ($RetryCount -lt $MaxRetries)
+
+        # Max retries exceeded
+        return @{
+            Success = $false
+            Breaches = @()
+            Error = "Rate limit exceeded after $MaxRetries retries"
+        }
+    }
+    catch {
+        return @{
+            Success = $false
+            Breaches = @()
+            Error = "API call failed: $($_.Exception.Message)"
+        }
+    }
+}
+
 function Get-BreachRiskLevel {
     <#
     .SYNOPSIS
@@ -354,6 +595,50 @@ function Get-BreachRiskLevel {
     catch {
         # If we can't parse the date, default to medium risk
         return "MEDIUM"
+    }
+}
+
+function Import-EmailListFromFile {
+    <#
+    .SYNOPSIS
+        Imports email addresses from a simple text file (one email per line, no header)
+    #>
+    param(
+        [string]$FilePath
+    )
+
+    try {
+        if (-not (Test-Path $FilePath)) {
+            Write-LogMessage "ERROR" "Email list file not found: $FilePath" "DARKWEB"
+            return @()
+        }
+
+        $EmailAddresses = @()
+        $LineNumber = 0
+
+        Get-Content $FilePath | ForEach-Object {
+            $LineNumber++
+            $Line = $_.Trim()
+
+            # Skip empty lines
+            if ([string]::IsNullOrWhiteSpace($Line)) {
+                return
+            }
+
+            # Basic email validation
+            if ($Line -match '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$') {
+                $EmailAddresses += $Line
+            } else {
+                Write-LogMessage "WARN" "Line $LineNumber is not a valid email address: $Line" "DARKWEB"
+            }
+        }
+
+        Write-LogMessage "SUCCESS" "Loaded $($EmailAddresses.Count) email addresses from $FilePath" "DARKWEB"
+        return $EmailAddresses
+    }
+    catch {
+        Write-LogMessage "ERROR" "Failed to read email list: $($_.Exception.Message)" "DARKWEB"
+        return @()
     }
 }
 

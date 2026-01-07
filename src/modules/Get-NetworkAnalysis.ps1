@@ -270,13 +270,14 @@ function Get-NetworkAnalysis {
                 # Ignore errors checking for custom port
             }
             
+            # RDP disabled is baseline - only report if enabled
             if ($RDPEnabled -or $RDPListening) {
                 $RDPStatus = if ($RDPEnabled -and $RDPListening) { "Enabled and Listening" }
                             elseif ($RDPEnabled) { "Enabled (Not Listening)" }
                             else { "Listening (Unknown Config)" }
-                
+
                 $PortText = if ($RDPPort -ne 3389) { " on custom port $RDPPort" } else { "" }
-                
+
                 $Results += [PSCustomObject]@{
                     Category = "Network"
                     Item = "Remote Desktop (RDP)"
@@ -285,19 +286,10 @@ function Get-NetworkAnalysis {
                     RiskLevel = "HIGH"
                     Recommendation = "Secure remote access - use VPN, strong auth, restrict source IPs, enable logging"
                 }
-                
+
                 Write-LogMessage "WARN" "RDP detected: $RDPStatus on port $RDPPort" "NETWORK"
             } else {
-                $Results += [PSCustomObject]@{
-                    Category = "Network"
-                    Item = "Remote Desktop (RDP)"
-                    Value = "Disabled"
-                    Details = "Port 3389 not listening"
-                    RiskLevel = "LOW"
-                    Recommendation = ""
-                }
-
-                Write-LogMessage "INFO" "RDP is disabled" "NETWORK"
+                Write-LogMessage "INFO" "RDP is disabled (baseline)" "NETWORK"
             }
         }
         catch {

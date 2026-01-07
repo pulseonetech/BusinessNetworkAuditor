@@ -193,19 +193,25 @@ function Get-UserAccountAnalysis {
                 Write-LogMessage "WARN" "Could not check disabled domain accounts: $($_.Exception.Message)" "USERS"
             }
         } else {
-            # For regular systems: Check Guest Account Status
+            # For regular systems: Check Guest Account Status (only report if enabled)
             try {
                 $LocalUsers = Get-CimInstance -ClassName Win32_UserAccount -Filter "LocalAccount=True" -ErrorAction SilentlyContinue
                 if ($LocalUsers) {
                     $GuestAccount = $LocalUsers | Where-Object { $_.Name -eq "Guest" }
                     if ($GuestAccount) {
-                        $Results += [PSCustomObject]@{
-                            Category = "Users"
-                            Item = "Guest Account"
-                            Value = if ($GuestAccount.Disabled) { "Disabled" } else { "Enabled" }
-                            Details = "Guest account status"
-                            RiskLevel = if ($GuestAccount.Disabled) { "LOW" } else { "HIGH" }
-                            Recommendation = if (-not $GuestAccount.Disabled) { "Disable guest account" } else { "" }
+                        # Guest Account disabled is baseline - only report if enabled
+                        if (-not $GuestAccount.Disabled) {
+                            $Results += [PSCustomObject]@{
+                                Category = "Users"
+                                Item = "Guest Account"
+                                Value = "Enabled"
+                                Details = "Guest account is enabled"
+                                RiskLevel = "HIGH"
+                                Recommendation = "Disable guest account"
+                            }
+                            Write-LogMessage "WARN" "Guest account is enabled" "USERS"
+                        } else {
+                            Write-LogMessage "INFO" "Guest account is disabled (baseline)" "USERS"
                         }
                     } else {
                         Write-LogMessage "INFO" "No Guest account found in local users" "USERS"

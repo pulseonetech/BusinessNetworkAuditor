@@ -93,8 +93,9 @@ function Get-FileShareAnalysis {
                             $EveryoneAccess = $ShareAccess | Where-Object { $_.AccountName -eq "Everyone" }
                             $AnonymousAccess = if ($EveryoneAccess) { "Possible" } else { "Restricted" }
                             
-                            # Increase risk if Everyone has access
-                            if ($EveryoneAccess) {
+                            # Increase risk if Everyone has access (except for DC shares which require it)
+                            $IsDCShare = $Share.Name -match "^(NETLOGON|SYSVOL)$"
+                            if ($EveryoneAccess -and -not $IsDCShare) {
                                 $ShareRisk = "HIGH"
                             }
                         }

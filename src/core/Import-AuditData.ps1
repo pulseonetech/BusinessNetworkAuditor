@@ -161,7 +161,7 @@ function Import-AuditData {
             # Process findings based on file type
             if ($IsDarkWebFile) {
                 # Process dark web results (limit to max 10 results as requested)
-                $DarkWebFindings = $AuditData.Results | Where-Object { $_.Item -like "*Domain Breach*" } | Select-Object -First 10
+                $DarkWebFindings = $AuditData.Results | Where-Object { $_.Item -like "*Breach*" -and $_.Item -notlike "*Breach Details*" } | Select-Object -First 10
 
                 foreach ($Finding in $DarkWebFindings) {
                     $EnrichedFinding = [PSCustomObject]@{

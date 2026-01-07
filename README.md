@@ -46,9 +46,22 @@ curl -s https://raw.githubusercontent.com/pulseonetech/BusinessNetworkAuditor/de
 ```
 
 ### Dark Web Breach Analysis
+
+**Domain-Based Scanning** (requires domain ownership verification):
 ```powershell
 .\src\DarkWebChecker.ps1 -Domains "client.com,subsidiary.org"
-.\src\DarkWebChecker.ps1 -DemoMode
+```
+
+**Email-Based Scanning** (requires API key, no verification needed):
+```powershell
+# Single or multiple emails
+.\src\DarkWebChecker.ps1 -Emails "user1@company.com,user2@company.com"
+
+# From a file (one email per line, no header)
+.\src\DarkWebChecker.ps1 -EmailList ".\config\email-list.txt"
+
+# Demo mode (no API calls)
+.\src\DarkWebChecker.ps1 -Emails "test@example.com" -DemoMode
 ```
 
 ### Multi-System Aggregation
@@ -73,14 +86,14 @@ See `examples/` directory for sample reports:
 - **Windows**: 10/11 or Server 2016+, PowerShell 5.0+
 - **macOS**: 12+ (Monterey), admin privileges recommended
 - **Web versions**: Built with `./Build-WebVersions.ps1`
-- **Dark Web Checker**: Internet connectivity, optional API key for enhanced results
+- **Dark Web Checker**: Internet connectivity, API key required for email scanning (optional for domain scanning)
 
 ## Output
 
 - **Markdown Report**: Technical findings with risk levels and recommendations
 - **JSON Export**: Complete data for aggregation and documentation
 - **HTML Report**: Client-ready aggregated report (via NetworkAuditAggregator)
-- **Dark Web Report**: Domain breach analysis with timeline and impact assessment
+- **Dark Web Report**: Domain or email breach analysis with timeline and impact assessment
 
 ## Configuration
 
