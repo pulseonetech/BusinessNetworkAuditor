@@ -45,6 +45,12 @@ iex (irm https://raw.githubusercontent.com/pulseonetech/BusinessNetworkAuditor/d
 curl -s https://raw.githubusercontent.com/pulseonetech/BusinessNetworkAuditor/development/macOSWorkstationAuditor-Web.sh | sudo bash
 ```
 
+**Output Location:**
+- Windows: `C:\Users\<Username>\WindowsAudit\`
+- macOS: `~/macOSAudit/`
+
+Reports include a markdown file (technical findings) and JSON file (raw data for aggregation).
+
 ### Dark Web Breach Analysis
 ```powershell
 .\src\DarkWebChecker.ps1 -Domains "client.com,subsidiary.org"
