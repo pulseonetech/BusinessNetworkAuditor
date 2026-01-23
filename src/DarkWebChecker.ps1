@@ -16,7 +16,7 @@ param(
     [string]$OutputPath = ".\output",
 
     [Parameter(Mandatory=$false)]
-    [string]$ConfigPath = ".\config\hibp-api-config.json",
+    [string]$ConfigPath,
 
     [Parameter(Mandatory=$false)]
     [switch]$DetailedLogging,
@@ -81,6 +81,11 @@ EXAMPLES:
 
 "@ -ForegroundColor Cyan
     exit 0
+}
+
+# Resolve ConfigPath relative to script location if not provided
+if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
+    $ConfigPath = Join-Path $PSScriptRoot "..\config\hibp-api-config.json"
 }
 
 # Global variables

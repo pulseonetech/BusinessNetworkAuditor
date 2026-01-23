@@ -66,6 +66,22 @@ function Get-DarkWebAnalysis {
         if ($DemoMode) {
             Write-LogMessage "INFO" "Demo mode enabled - using simulated data" "DARKWEB"
         } else {
+            # Try multiple config locations if default path doesn't exist
+            if (-not (Test-Path $ConfigPath)) {
+                $AlternatePaths = @(
+                    (Join-Path $PSScriptRoot "..\config\hibp-api-config.json"),
+                    (Join-Path $PSScriptRoot "..\..\config\hibp-api-config.json"),
+                    ".\config\hibp-api-config.json",
+                    "..\config\hibp-api-config.json"
+                )
+                foreach ($AltPath in $AlternatePaths) {
+                    if (Test-Path $AltPath) {
+                        $ConfigPath = $AltPath
+                        break
+                    }
+                }
+            }
+
             # Load configuration or create minimal config for subscription-free mode
             if (-not (Test-Path $ConfigPath)) {
                 Write-LogMessage "WARN" "No configuration file found - will attempt subscription-free mode" "DARKWEB"
