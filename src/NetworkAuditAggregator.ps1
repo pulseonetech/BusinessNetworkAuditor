@@ -44,8 +44,9 @@ $Script:AggregationSummary = @{}
 # Import core functions
 $CorePath = Join-Path $PSScriptRoot "core"
 $CoreFiles = @(
+    "Import-ReportConfig.ps1",
     "Import-AuditData.ps1",
-    "Generate-ExecutiveSummary.ps1", 
+    "Generate-ExecutiveSummary.ps1",
     "Generate-ScoringMatrix.ps1",
     "Generate-RiskAnalysis.ps1",
     "Export-ClientReport.ps1"
@@ -69,25 +70,25 @@ foreach ($CoreFile in $CoreFiles) {
 try {
     Write-Host "`nStep 1: Importing audit data..." -ForegroundColor Cyan
     $ImportResult = Import-AuditData -ImportPath $ImportPath
-    
+
     if ($ImportResult.SystemCount -eq 0) {
         Write-Warning "No audit files found in $ImportPath"
         Write-Host "Expected file format: COMPUTERNAME_YYYYMMDD_HHMMSS_raw_data.json"
         exit 1
     }
-    
+
     Write-Host "  > Imported $($ImportResult.SystemCount) systems"
-    Write-Host "  > Total findings: $($ImportResult.FindingCount)" 
-    
+    Write-Host "  > Total findings: $($ImportResult.FindingCount)"
+
     Write-Host "`nStep 2: Generating executive summary..." -ForegroundColor Cyan
     $ExecutiveSummary = Generate-ExecutiveSummary -ImportedData $ImportResult -ClientName $ClientName
-    
-    Write-Host "`nStep 3: Creating scoring matrix..." -ForegroundColor Cyan  
+
+    Write-Host "`nStep 3: Creating scoring matrix..." -ForegroundColor Cyan
     $ScoringMatrix = Generate-ScoringMatrix -ImportedData $ImportResult
-    
+
     Write-Host "`nStep 4: Analyzing risk factors..." -ForegroundColor Cyan
     $RiskAnalysis = Generate-RiskAnalysis -ImportedData $ImportResult
-    
+
     Write-Host "`nStep 5: Generating client report..." -ForegroundColor Cyan
     $ReportPath = Export-ClientReport -ExecutiveSummary $ExecutiveSummary -ScoringMatrix $ScoringMatrix -RiskAnalysis $RiskAnalysis -OutputPath $OutputPath -ClientName $ClientName
     

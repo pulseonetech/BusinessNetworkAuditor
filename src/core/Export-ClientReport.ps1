@@ -111,7 +111,6 @@ function Export-ClientReport {
                     "<p><strong>Assessment Scope:</strong> $ScopeText</p>"
                 )
                 <p><strong>Total Findings:</strong> $($ExecutiveSummary.TotalFindings) items identified across all systems</p>
-                <p><strong>Priority Actions:</strong> $($ExecutiveSummary.PriorityRecommendations.Count) immediate recommendations</p>
             </div>
 
             <!-- Security Strengths Section -->
@@ -131,10 +130,16 @@ function Export-ClientReport {
                             $ItemCount = $Items.Count
 
                             "<div style='margin-bottom: 15px; padding: 10px; background: rgba(40, 167, 69, 0.1); border-radius: 4px;'>" +
-                            "<strong style='color: #28a745;'>$CategoryName ($ItemCount items):</strong><br>" +
+                            "<strong style='color: #28a745;'>$CategoryName ($ItemCount types):</strong><br>" +
                             "<ul style='margin: 5px 0; padding-left: 20px; color: #155724;'>" +
-                            (($Items | Select-Object -First 5 | ForEach-Object { "<li>$($_.Strength)</li>" }) -join "") +
-                            $(if ($ItemCount -gt 5) { "<li style='color: #6c757d;'><em>... and $($ItemCount - 5) more</em></li>" } else { "" }) +
+                            (($Items | Select-Object -First 10 | ForEach-Object {
+                                $DisplayText = $_.Strength
+                                if ($_.SystemCount -gt 1) {
+                                    $DisplayText += " ($($_.SystemCount) systems)"
+                                }
+                                "<li>$DisplayText</li>"
+                            }) -join "") +
+                            $(if ($ItemCount -gt 10) { "<li style='color: #6c757d;'><em>... and $($ItemCount - 10) more</em></li>" } else { "" }) +
                             "</ul>" +
                             "</div>"
                         }) -join ""
@@ -146,36 +151,7 @@ function Export-ClientReport {
             </div>
 "@ })
         </div>
-        
-        <!-- Scoring Summary -->
-        <div class="section">
-            <h2 class="section-header">Scoring Summary</h2>
-            <div class="scoring-note">
-                <p><strong>Client Adherence Rating Scale:</strong></p>
-                <ul>
-                    <li>5 - Adhere to the best practice</li>
-                    <li>4 - Strong adherence, minimal gaps identified</li>
-                    <li>3 - Adhere in some areas, but not all</li>
-                    <li>2 - Limited adherence to the best practice(s), several gaps identified</li>
-                    <li>1 - No adherence to the best practice(s)</li>
-                </ul>
-            </div>
-            
-            <table class="scoring-table">
-                <thead>
-                    <tr>
-                        <th>Component</th>
-                        <th>Section Criticality</th>
-                        <th>Client Adherence</th>
-                        <th>Overview</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    $(Generate-ScoringTableRows -Components $ScoringMatrix.Components)
-                </tbody>
-            </table>
-        </div>
-        
+
         <!-- Risk Analysis -->
         <div class="section">
             <h2 class="section-header">Risk Analysis</h2>
@@ -185,8 +161,10 @@ function Export-ClientReport {
             $(Generate-RiskSection -Title "Medium Risk" -Color "medium-risk" -Findings $RiskAnalysis.MediumRiskFindings)
             
             $(Generate-RiskSection -Title "Low Risk" -Color "low-risk" -Findings $RiskAnalysis.LowRiskFindings)
+
+            $(Generate-DarkWebSection -Findings $RiskAnalysis.DarkWebFindings)
         </div>
-        
+
         <!-- Systems Snapshot -->
         <div class="section">
             <h2 class="section-header">Systems Overview</h2>
@@ -208,26 +186,7 @@ function Export-ClientReport {
                 </tbody>
             </table>
         </div>
-        
-        <!-- Priority Recommendations -->
-        <div class="section">
-            <h2 class="section-header">Priority Recommendations</h2>
-            <table class="recommendations-table">
-                <thead>
-                    <tr>
-                        <th>Priority</th>
-                        <th>Category</th>
-                        <th>Recommendation</th>
-                        <th>Timeframe</th>
-                        <th>Impact</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    $(Generate-RecommendationsTableRows -Recommendations $ExecutiveSummary.PriorityRecommendations)
-                </tbody>
-            </table>
-        </div>
-        
+
         <div class="footer">
             <p>Report generated on $(Get-Date -Format 'MMMM dd, yyyy') by BusinessNetworkAggregator v1.0.0</p>
         </div>
@@ -330,10 +289,21 @@ function Generate-RiskSection {
 "@
     
     foreach ($finding in $Findings) {
+        # Format description - if it contains ||| delimiter, it's per-system data
+        $DescriptionHtml = $finding.Description
+        if ($finding.Description -and $finding.Description.Contains("|||")) {
+            $SystemItems = $finding.Description -split '\|\|\|'
+            $DescriptionHtml = "<ul style='margin: 5px 0; padding-left: 20px;'>`n"
+            foreach ($Item in $SystemItems) {
+                $DescriptionHtml += "                    <li>$Item</li>`n"
+            }
+            $DescriptionHtml += "                </ul>"
+        }
+
         $content += @"
             <div class="risk-item">
                 <div class="risk-title">$($finding.RiskFactor)</div>
-                <div class="risk-description">$($finding.Description)</div>
+                <div class="risk-description">$DescriptionHtml</div>
                 <div class="risk-recommendation"><strong>Recommendation:</strong> $($finding.Recommendation)</div>
                 <small><strong>Affected Systems ($($finding.AffectedCount)):</strong> $($finding.AffectedSystems)</small>
             </div>
@@ -345,6 +315,58 @@ function Generate-RiskSection {
     </div>
 "@
     
+    return $content
+}
+
+function Generate-DarkWebSection {
+    <#
+    .SYNOPSIS
+        Generates Dark Web Analysis section with custom formatting for breach data
+    #>
+    param([array]$Findings)
+
+    if ($Findings.Count -eq 0) { return "" }
+
+    $content = @"
+    <div class="risk-section">
+        <div class="risk-header" style="background: #2c3e50; color: white;">Dark Web Analysis</div>
+        <div class="risk-content">
+            <p style="margin: 10px 0; padding: 10px; background: #ecf0f1; border-left: 4px solid #2c3e50; color: #2c3e50;">
+                <strong>What this means:</strong> Historical data breaches involving your organization's domains have been identified.
+                Compromised credentials from these breaches are often sold on dark web marketplaces and used in credential stuffing attacks,
+                phishing campaigns, and targeted intrusions. Even old breaches remain valuable to attackers as many users reuse passwords
+                across multiple services.
+            </p>
+"@
+
+    foreach ($finding in $Findings) {
+        # Parse breach details from Description field
+        $breachDetails = $finding.Description
+
+        # Extract domain from Value field (e.g., "adobe.com - Adobe")
+        $domain = if ($finding.Description -match 'Breach Date:') {
+            $breachDetails -replace ',?\s*Breach Date:.*', ''
+        } else {
+            "Unknown"
+        }
+
+        $content += @"
+            <div class="risk-item" style="border-left: 4px solid #2c3e50;">
+                <div class="risk-title">$($finding.RiskFactor)</div>
+                <div class="risk-description">
+                    <div style="margin-bottom: 8px;"><strong>Breach Details:</strong> $breachDetails</div>
+                </div>
+                <div class="risk-recommendation"><strong>Recommendation:</strong> $($finding.Recommendation)</div>
+                <small style="color: #2c3e50;"><strong>Analysis Date:</strong> $($finding.AffectedSystems)</small>
+            </div>
+"@
+    }
+
+    $content += @"
+        </div>
+    </div>
+"@
+
     return $content
 }
 

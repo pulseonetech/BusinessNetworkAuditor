@@ -292,12 +292,12 @@ function Get-NetworkAnalysis {
                     Category = "Network"
                     Item = "Remote Desktop (RDP)"
                     Value = "Disabled"
-                    Details = "RDP is properly disabled"
+                    Details = "Port 3389 not listening"
                     RiskLevel = "LOW"
                     Recommendation = ""
                 }
-                
-                Write-LogMessage "INFO" "RDP is disabled - good security posture" "NETWORK"
+
+                Write-LogMessage "INFO" "RDP is disabled" "NETWORK"
             }
         }
         catch {
