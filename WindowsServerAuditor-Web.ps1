@@ -3,7 +3,7 @@
 # Platform: Windows 10/11, Windows Server 2008-2022+
 # Requires: PowerShell 5.0+
 # Usage: [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; iex (irm https://your-url/WindowsServerAuditor-Web.ps1)
-# Built: 2025-12-11 18:01:07
+# Built: 2026-01-23 13:10:15
 # Modules: 27 embedded modules in dependency order
 
 param(
@@ -14,7 +14,7 @@ param(
 # Embedded Configuration
 $Script:EmbeddedConfig = @'
 {
-  "version": "1.3.0",
+  "version": "1.0.0",
   "modules": {
     "system": {
       "enabled": true,
