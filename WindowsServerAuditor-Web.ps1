@@ -3,7 +3,7 @@
 # Platform: Windows 10/11, Windows Server 2008-2022+
 # Requires: PowerShell 5.0+
 # Usage: [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; iex (irm https://your-url/WindowsServerAuditor-Web.ps1)
-# Built: 2026-01-23 13:10:15
+# Built: 2026-01-23 17:10:24
 # Modules: 27 embedded modules in dependency order
 
 param(
@@ -152,9 +152,14 @@ $Script:EmbeddedConfig = @'
       "McAfee": [
         "mcshield",
         "mfemms",
+        "mfevtp",
         "mfevtps",
+        "mfefire",
         "McCSPServiceHost",
-        "masvc"
+        "mccspsvc",
+        "masvc",
+        "McAPExe",
+        "McAWFwk"
       ],
       "Symantec": [
         "ccSvcHst",
