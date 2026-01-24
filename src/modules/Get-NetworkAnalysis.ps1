@@ -160,10 +160,32 @@ function Get-NetworkAnalysis {
             $TCPPortCount = $ListeningPorts.Count
             $UDPPortCount = $UDPPorts.Count
             
-            # Check for common risky ports
-            # Only flag truly risky/obsolete ports - NOT standard Windows business ports
-            # Standard ports like 135 (RPC), 139 (NetBIOS), 445 (SMB), 3389 (RDP) are normal
-            $RiskyTCPPorts = @(21, 23, 5900)  # FTP, Telnet, VNC - insecure/obsolete protocols
+            # Detect if this is a workstation or server
+            $OSInfo = Get-CimInstance -ClassName Win32_OperatingSystem
+            $IsWorkstation = ($OSInfo.ProductType -eq 1)  # 1=Workstation, 2=DC, 3=Server
+
+            # Define risky ports based on system role
+            # Always risky (insecure/obsolete protocols):
+            $AlwaysRiskyPorts = @(21, 23, 69, 4444)  # FTP, Telnet, TFTP, Metasploit
+
+            # Risky on workstations only (legitimate on servers):
+            $WorkstationRiskyPorts = @(
+                25, 587,                    # Mail servers
+                80, 443, 8080, 8443,        # Web servers
+                1433, 3306, 5432, 1521, 27017,  # Databases (SQL, MySQL, PostgreSQL, Oracle, MongoDB)
+                5800, 5900,                 # VNC
+                4899,                       # Radmin
+                5938,                       # TeamViewer
+                6568,                       # AnyDesk
+                6881, 6882, 6883, 6884, 6885, 6886, 6887, 6888, 6889  # BitTorrent
+            )
+
+            $RiskyTCPPorts = if ($IsWorkstation) {
+                $AlwaysRiskyPorts + $WorkstationRiskyPorts
+            } else {
+                $AlwaysRiskyPorts  # Servers only flag truly insecure protocols
+            }
+
             $OpenRiskyPorts = $ListeningPorts | Where-Object { $_.LocalPort -in $RiskyTCPPorts }
             
             $PortRisk = if ($OpenRiskyPorts.Count -gt 0) { "HIGH" } 
@@ -192,9 +214,27 @@ function Get-NetworkAnalysis {
                 $PortSummary = ($UniqueRiskyPorts | ForEach-Object {
                     $Port = $_.LocalPort
                     $Svc = switch ($Port) {
-                        21 { "FTP - unencrypted" }
-                        23 { "Telnet - insecure" }
-                        5900 { "VNC - often insecure" }
+                        21 { "FTP" }
+                        23 { "Telnet" }
+                        25 { "SMTP" }
+                        69 { "TFTP" }
+                        80 { "HTTP" }
+                        443 { "HTTPS" }
+                        587 { "SMTP" }
+                        1433 { "SQL Server" }
+                        1521 { "Oracle" }
+                        3306 { "MySQL" }
+                        4444 { "Suspicious" }
+                        4899 { "Radmin" }
+                        5432 { "PostgreSQL" }
+                        5800 { "VNC-HTTP" }
+                        5900 { "VNC" }
+                        5938 { "TeamViewer" }
+                        6568 { "AnyDesk" }
+                        8080 { "HTTP-Alt" }
+                        8443 { "HTTPS-Alt" }
+                        27017 { "MongoDB" }
+                        { $_ -ge 6881 -and $_ -le 6889 } { "BitTorrent" }
                         default { "Unknown" }
                     }
                     "$Port ($Svc)"
@@ -220,9 +260,27 @@ function Get-NetworkAnalysis {
                     } else { "Unknown" }
                     
                     $ServiceName = switch ($PortNumber) {
-                        21 { "FTP (unencrypted file transfer)" }
-                        23 { "Telnet (insecure remote access)" }
-                        5900 { "VNC (often insecure)" }
+                        21 { "FTP (unencrypted)" }
+                        23 { "Telnet (insecure)" }
+                        25 { "SMTP Mail Server" }
+                        69 { "TFTP (insecure)" }
+                        80 { "HTTP Web Server" }
+                        443 { "HTTPS Web Server" }
+                        587 { "SMTP Mail Server" }
+                        1433 { "SQL Server Database" }
+                        1521 { "Oracle Database" }
+                        3306 { "MySQL Database" }
+                        4444 { "Suspicious Port" }
+                        4899 { "Radmin Remote Access" }
+                        5432 { "PostgreSQL Database" }
+                        5800 { "VNC HTTP" }
+                        5900 { "VNC Remote Access" }
+                        5938 { "TeamViewer" }
+                        6568 { "AnyDesk" }
+                        8080 { "HTTP Alternate" }
+                        8443 { "HTTPS Alternate" }
+                        27017 { "MongoDB Database" }
+                        { $_ -ge 6881 -and $_ -le 6889 } { "BitTorrent P2P" }
                         default { "Unknown Service" }
                     }
                     
