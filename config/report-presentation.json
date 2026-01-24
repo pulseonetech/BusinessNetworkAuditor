@@ -1,6 +1,12 @@
 {
-  "version": "1.0",
+  "version": "1.1",
   "description": "Report presentation configuration - controls grouping, formatting, and display preferences",
+
+  "section_labels": {
+    "high_risk": "High Risk Items",
+    "medium_risk": "Medium Risk Items",
+    "low_risk": "Info Items"
+  },
 
   "grouping": {
     "combine_per_system": [
@@ -22,11 +28,43 @@
       "Domain Admins",
       "Privileged Group",
       "Failed Logon",
-      "Available Updates",
       "Critical Role Detected",
       "Server Role"
     ]
   },
+
+  "omit_from_report": [
+    "Wireless Profiles",
+    "Wireless Profile",
+    "Network Discovery",
+    "DNS Configuration",
+    "DNS Config",
+    "IP Configuration",
+    "IP Config",
+    "Printer",
+    "Printers",
+    "Print Services"
+  ],
+
+  "demote_to_info": [
+    "Recent Patches",
+    "Recently Applied Patches",
+    "Windows Update Configuration",
+    "Automatic Updates"
+  ],
+
+  "available_updates_threshold": 10,
+
+  "default_windows_ports": [
+    135,
+    137,
+    138,
+    139,
+    445,
+    3389,
+    5985,
+    5986
+  ],
 
   "formatting": {
     "BitLocker Encryption": {
@@ -36,16 +74,37 @@
     "FileVault Encryption": {
       "show_system_context": true,
       "context_template": "WARNING: {unencrypted_count} of {total_count} systems lack full disk encryption"
+    },
+    "Risky Open Ports": {
+      "show_port_details": true,
+      "exclude_default_ports": true
     }
   },
 
   "security_strengths": {
     "categories": {
       "Malware Protection": {
-        "finding_patterns": ["*Antivirus Product*"],
-        "exclude_values": ["*Windows Defender*"],
-        "format": "Antivirus: {Value}",
+        "finding_patterns": ["*Antivirus*", "*AV Protection*", "*Antivirus Product*"],
+        "format": "{Value}",
         "show_per_system": true
+      },
+      "Remote Access Security": {
+        "finding_patterns": ["*Remote Desktop*", "*RDP*"],
+        "require_value_match": "*Disabled*",
+        "format": "Remote Desktop Disabled",
+        "show_system_count": true
+      },
+      "Account Security": {
+        "finding_patterns": ["*Guest Account*"],
+        "require_value_match": "*Disabled*",
+        "format": "Guest Account Disabled",
+        "show_system_count": true
+      },
+      "Access Control": {
+        "finding_patterns": ["*User Account Control*", "*UAC*"],
+        "require_value_match": "*Enabled*",
+        "format": "UAC Enabled",
+        "show_system_count": true
       },
       "Data Encryption": {
         "finding_patterns": ["*BitLocker*", "*FileVault*"],
@@ -58,17 +117,6 @@
         "exclude_values": ["*Workgroup*"],
         "format": "Domain: {Value}",
         "show_system_count": true
-      },
-      "Access Control": {
-        "finding_patterns": [
-          "*Password Policy*",
-          "*Password Complexity*",
-          "*Password History*",
-          "*Account Lockout*",
-          "*User Account Control*"
-        ],
-        "risk_levels": ["LOW", "INFO"],
-        "show_per_system": false
       },
       "Data Protection": {
         "finding_patterns": ["*Time Machine*", "*Backup*"],
@@ -123,6 +171,20 @@
         "reason": "Required DC shares flagged as risky",
         "action": "Exclude when condition met",
         "remove_after": "Audit recognizes DC shares as normal"
+      },
+      {
+        "item": "Remote Desktop",
+        "condition": "value matches Disabled",
+        "reason": "Disabled RDP is a strength, not a risk",
+        "action": "Move to security strengths",
+        "remove_after": "Audit categorizes RDP disabled as strength"
+      },
+      {
+        "item": "Guest Account",
+        "condition": "value matches Disabled",
+        "reason": "Disabled Guest is a strength, not a risk",
+        "action": "Move to security strengths",
+        "remove_after": "Audit categorizes Guest disabled as strength"
       }
     ]
   }

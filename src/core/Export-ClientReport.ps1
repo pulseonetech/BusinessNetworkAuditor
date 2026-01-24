@@ -96,7 +96,7 @@ function Export-ClientReport {
                 </div>
                 <div class="metric-box low-risk">
                     <div class="metric-value">$($ExecutiveSummary.RiskDistribution.LowRisk)</div>
-                    <div class="metric-label">Low Risk</div>
+                    <div class="metric-label">Info Items</div>
                 </div>
             </div>
             
@@ -160,7 +160,7 @@ function Export-ClientReport {
             
             $(Generate-RiskSection -Title "Medium Risk" -Color "medium-risk" -Findings $RiskAnalysis.MediumRiskFindings)
             
-            $(Generate-RiskSection -Title "Low Risk" -Color "low-risk" -Findings $RiskAnalysis.LowRiskFindings)
+            $(Generate-RiskSection -Title "Info Items" -Color "low-risk" -Findings $RiskAnalysis.LowRiskFindings)
 
             $(Generate-DarkWebSection -Findings $RiskAnalysis.DarkWebFindings)
         </div>

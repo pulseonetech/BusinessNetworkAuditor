@@ -82,6 +82,63 @@ function Generate-RiskAnalysis {
     }
 
     # ============================================================================
+    # Demote items to INFO level based on config
+    # ============================================================================
+    if ($ReportConfig.demote_to_info) {
+        foreach ($DemoteItem in $ReportConfig.demote_to_info) {
+            $ConsolidatedFindings | Where-Object { $_.Item -like "*$DemoteItem*" } | ForEach-Object {
+                if ($_.RiskLevel -ne "LOW") {
+                    Write-Verbose "Demoting $($_.Item) from $($_.RiskLevel) to LOW (Info)"
+                    $_.RiskLevel = "LOW"
+                }
+            }
+        }
+    }
+
+    # Handle Available Updates - demote unless above threshold
+    if ($ReportConfig.available_updates_threshold) {
+        $Threshold = $ReportConfig.available_updates_threshold
+        $ConsolidatedFindings | Where-Object { $_.Item -like "*Available Updates*" } | ForEach-Object {
+            # Try to extract count from value or details
+            $Count = 0
+            if ($_.Value -match "(\d+)") { $Count = [int]$Matches[1] }
+            if ($Count -lt $Threshold -and $_.RiskLevel -ne "LOW") {
+                Write-Verbose "Demoting Available Updates ($Count < $Threshold threshold) to LOW"
+                $_.RiskLevel = "LOW"
+            }
+        }
+    }
+
+    # Filter out RDP Disabled and Guest Account Disabled from risk items (they are strengths)
+    $ConsolidatedFindings = $ConsolidatedFindings | Where-Object {
+        $dominated = $false
+        if ($_.Item -like "*Remote Desktop*" -and $_.Value -like "*Disabled*") {
+            $dominated = $true
+        }
+        if ($_.Item -like "*Guest Account*" -and $_.Value -like "*Disabled*") {
+            $dominated = $true
+        }
+        -not $dominated
+    }
+
+    # Filter risky ports that are just default Windows ports
+    if ($ReportConfig.default_windows_ports) {
+        $DefaultPorts = $ReportConfig.default_windows_ports
+        $ConsolidatedFindings = $ConsolidatedFindings | Where-Object {
+            if ($_.Item -like "*Risky*Port*" -or $_.Item -like "*Open Port*") {
+                # Check if all ports mentioned are default ports
+                $PortNumbers = [regex]::Matches($_.Details, "\b(\d{2,5})\b") | ForEach-Object { [int]$_.Groups[1].Value }
+                $NonDefaultPorts = $PortNumbers | Where-Object { $_ -notin $DefaultPorts }
+                if ($NonDefaultPorts.Count -eq 0 -and $PortNumbers.Count -gt 0) {
+                    Write-Verbose "Excluding $($_.Item) - only default Windows ports detected"
+                    return $false
+                }
+            }
+            return $true
+        }
+    }
+
+    # ============================================================================
     # TECHNICAL DEBT: Filter band-aids loaded from config
     # See config/report-presentation.json "technical_debt" section for details
     # ============================================================================
@@ -191,9 +248,10 @@ function Generate-RiskAnalysis {
     
     # Generate Systems Snapshot (similar to Computer Snapshot table)
     # Exclude dark web checks - only include actual computer systems
+    # Use consolidated (filtered) findings for accurate grading
     $ActualSystems = $ImportedData.Systems | Where-Object { $_.SystemType -ne "Breach Monitor" }
     foreach ($System in $ActualSystems) {
-        $SystemFindings = $ImportedData.AllFindings | Where-Object { $_.SystemName -eq $System.ComputerName }
+        $SystemFindings = $ConsolidatedFindings | Where-Object { $_.SystemName -eq $System.ComputerName }
         
         # Calculate grades for each category
         $Grades = @{
@@ -789,6 +847,16 @@ function Remove-RedundantFindings {
 
     $Filtered = $AllFindings | Where-Object {
         $Finding = $_
+
+        # Check omit_from_report list first
+        if ($ReportConfig.omit_from_report) {
+            foreach ($OmitItem in $ReportConfig.omit_from_report) {
+                if ($Finding.Item -like "*$OmitItem*") {
+                    Write-Verbose "Omitting $($Finding.Item) - matches omit_from_report: $OmitItem"
+                    return $false
+                }
+            }
+        }
 
         # Check if explicitly excluded (old redundancy rules)
         if (Test-FindingExcluded -Finding $Finding -Config $ReportConfig) {
