@@ -161,7 +161,9 @@ function Get-NetworkAnalysis {
             $UDPPortCount = $UDPPorts.Count
             
             # Check for common risky ports
-            $RiskyTCPPorts = @(21, 23, 135, 139, 445, 1433, 1521, 3306, 3389, 5432, 5900)
+            # Only flag truly risky/obsolete ports - NOT standard Windows business ports
+            # Standard ports like 135 (RPC), 139 (NetBIOS), 445 (SMB), 3389 (RDP) are normal
+            $RiskyTCPPorts = @(21, 23, 5900)  # FTP, Telnet, VNC - insecure/obsolete protocols
             $OpenRiskyPorts = $ListeningPorts | Where-Object { $_.LocalPort -in $RiskyTCPPorts }
             
             $PortRisk = if ($OpenRiskyPorts.Count -gt 0) { "HIGH" } 
@@ -190,18 +192,10 @@ function Get-NetworkAnalysis {
                 $PortSummary = ($UniqueRiskyPorts | ForEach-Object {
                     $Port = $_.LocalPort
                     $Svc = switch ($Port) {
-                        21 { "FTP" }
-                        23 { "Telnet" }
-                        135 { "RPC" }
-                        139 { "NetBIOS" }
-                        445 { "SMB" }
-                        1433 { "SQL Server" }
-                        1521 { "Oracle" }
-                        3306 { "MySQL" }
-                        3389 { "RDP" }
-                        5432 { "PostgreSQL" }
-                        5900 { "VNC" }
-                        default { "Port" }
+                        21 { "FTP - unencrypted" }
+                        23 { "Telnet - insecure" }
+                        5900 { "VNC - often insecure" }
+                        default { "Unknown" }
                     }
                     "$Port ($Svc)"
                 }) -join ", "
@@ -226,17 +220,9 @@ function Get-NetworkAnalysis {
                     } else { "Unknown" }
                     
                     $ServiceName = switch ($PortNumber) {
-                        21 { "FTP" }
-                        23 { "Telnet" }
-                        135 { "RPC Endpoint Mapper" }
-                        139 { "NetBIOS Session Service" }
-                        445 { "SMB/CIFS" }
-                        1433 { "SQL Server" }
-                        1521 { "Oracle Database" }
-                        3306 { "MySQL" }
-                        3389 { "Remote Desktop" }
-                        5432 { "PostgreSQL" }
-                        5900 { "VNC" }
+                        21 { "FTP (unencrypted file transfer)" }
+                        23 { "Telnet (insecure remote access)" }
+                        5900 { "VNC (often insecure)" }
                         default { "Unknown Service" }
                     }
                     
