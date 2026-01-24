@@ -186,12 +186,32 @@ function Get-NetworkAnalysis {
             # Detail risky ports if found - header + detail format
             $UniqueRiskyPorts = $OpenRiskyPorts | Group-Object LocalPort | ForEach-Object { $_.Group[0] }
             if ($UniqueRiskyPorts.Count -gt 0) {
-                # Header entry with compliance message
+                # Build port list with service names for summary
+                $PortSummary = ($UniqueRiskyPorts | ForEach-Object {
+                    $Port = $_.LocalPort
+                    $Svc = switch ($Port) {
+                        21 { "FTP" }
+                        23 { "Telnet" }
+                        135 { "RPC" }
+                        139 { "NetBIOS" }
+                        445 { "SMB" }
+                        1433 { "SQL Server" }
+                        1521 { "Oracle" }
+                        3306 { "MySQL" }
+                        3389 { "RDP" }
+                        5432 { "PostgreSQL" }
+                        5900 { "VNC" }
+                        default { "Port" }
+                    }
+                    "$Port ($Svc)"
+                }) -join ", "
+
+                # Header entry with actual port details
                 $Results += [PSCustomObject]@{
                     Category = "Network"
                     Item = "Risky Open Ports"
                     Value = "$($UniqueRiskyPorts.Count) high-risk ports detected"
-                    Details = "Network services that may present security risks"
+                    Details = "Open ports: $PortSummary"
                     RiskLevel = "HIGH"
                     Recommendation = "Secure or disable unnecessary network services"
                 }
