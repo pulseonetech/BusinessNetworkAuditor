@@ -70,13 +70,6 @@ function Export-ClientReport {
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
-        <div class="header">
-            <h1>$ClientName</h1>
-            <h2>IT Assessment & Recommendations</h2>
-            <p class="report-date">$($ExecutiveSummary.AssessmentDate)</p>
-        </div>
-        
         <!-- Executive Summary -->
         <div class="section">
             <h2 class="section-header">Executive Summary</h2>
