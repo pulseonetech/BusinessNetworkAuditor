@@ -107,6 +107,18 @@ function Generate-RiskAnalysis {
         }
     }
 
+    # Promote items to HIGH level based on config
+    if ($ReportConfig.promote_to_high) {
+        foreach ($PromoteItem in $ReportConfig.promote_to_high) {
+            $ConsolidatedFindings | Where-Object { $_.Item -like "*$PromoteItem*" } | ForEach-Object {
+                if ($_.RiskLevel -eq "MEDIUM" -or $_.RiskLevel -eq "LOW") {
+                    Write-Verbose "Promoting $($_.Item) from $($_.RiskLevel) to HIGH"
+                    $_.RiskLevel = "HIGH"
+                }
+            }
+        }
+    }
+
     # Exclude findings for servers based on config (e.g., BitLocker)
     if ($ReportConfig.server_exclusions) {
         $ConsolidatedFindings = $ConsolidatedFindings | Where-Object {
@@ -266,7 +278,7 @@ function Generate-RiskAnalysis {
                 AffectedSystems = ($AffectedSystems.SystemName -join ", ")
                 Severity = "Moderate"
             }
-        } | Sort-Object AffectedCount -Descending | Select-Object -First 10
+        } | Sort-Object AffectedCount -Descending | Select-Object -First 15
 
     $RiskAnalysis.MediumRiskFindings = $MediumRiskItems
     
@@ -634,6 +646,12 @@ function Format-FindingDetails {
         if ($Processor) {
             return Format-FindingWithProcessor -Finding $Finding -Processor $Processor
         }
+    }
+
+    # Special handling for findings where Value is more informative than Details
+    if ($Finding.Item -match "Configuration Risk|Server Role" -and $Finding.Value) {
+        # Include both the specific role/issue and the generic guidance
+        return "$($Finding.SystemName): $($Finding.Value)"
     }
 
     # No config or processor, use Details as-is
