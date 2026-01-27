@@ -1,11 +1,16 @@
 {
-  "version": "1.1",
+  "version": "1.2",
   "description": "Report presentation configuration - controls grouping, formatting, and display preferences",
 
   "section_labels": {
     "high_risk": "High Risk Items",
     "medium_risk": "Medium Risk Items",
     "low_risk": "Info Items"
+  },
+
+  "display_limits": {
+    "max_systems_per_finding": 5,
+    "show_summary_when_exceeded": true
   },
 
   "grouping": {
@@ -16,7 +21,6 @@
       "RMM Software"
     ],
     "domain_wide_findings": [
-      "Computer Account Summary",
       "User Account Summary",
       "Disabled Domain Accounts",
       "Password Age Analysis",
@@ -26,7 +30,6 @@
     "normalize_risk_levels": [
       "Local Administrators",
       "Domain Admins",
-      "Privileged Group",
       "Failed Logon",
       "Critical Role Detected",
       "Server Role"
@@ -43,33 +46,59 @@
     "IP Config",
     "Printer",
     "Printers",
-    "Print Services"
+    "Print Services",
+    "Windows Update Service",
+    "Update Service",
+    "Computer Account Summary",
+    "Open Ports"
   ],
 
   "demote_to_info": [
     "Recent Patches",
     "Recently Applied Patches",
     "Windows Update Configuration",
-    "Automatic Updates"
+    "Automatic Updates",
+    "Privileged Group",
+    "Stale Computer Accounts",
+    "Stale User Accounts",
+    "Domain Status"
   ],
 
-  "available_updates_threshold": 10,
+  "demote_to_medium": [
+    "Low Disk Space",
+    "Disk Space"
+  ],
+
+  "server_exclusions": [
+    "BitLocker Encryption"
+  ],
+
+  "thresholds": {
+    "application_errors_min": 50,
+    "system_uptime_days_min": 30,
+    "available_updates": 10
+  },
 
   "default_windows_ports": [
-    135,
-    137,
-    138,
-    139,
-    445,
-    3389,
-    5985,
-    5986
+    135, 137, 138, 139, 445, 3389, 5985, 5986
   ],
+
+  "recommendations": {
+    "Screen Lock": "Configure automatic screen lock after 15 minutes of inactivity via Group Policy or MDM",
+    "Screen Lock Policy": "Configure automatic screen lock after 15 minutes of inactivity via Group Policy or MDM",
+    "Update Status": "Review pending updates and schedule maintenance window for installation",
+    "Available Updates": "Schedule maintenance window to install pending updates",
+    "Audit Policy": "Enable audit policies for: Account Logon, Logon/Logoff, Object Access, Policy Change, Privilege Use, and System events",
+    "Audit Policy Configuration": "Enable audit policies for: Account Logon, Logon/Logoff, Object Access, Policy Change, Privilege Use, and System events",
+    "Stale User Accounts": "Review and disable or remove user accounts that have not logged in for 90+ days",
+    "Stale Computer Accounts": "Review and remove computer accounts that have not connected for 90+ days"
+  },
 
   "formatting": {
     "BitLocker Encryption": {
       "show_system_context": true,
-      "context_template": "WARNING: {unencrypted_count} of {total_count} systems lack full disk encryption"
+      "context_template": "WARNING: {unencrypted_count} of {total_count} workstations lack full disk encryption",
+      "workstation_only": true
     },
     "FileVault Encryption": {
       "show_system_context": true,
@@ -136,55 +165,42 @@
     "note": "The following are temporary band-aids that should be removed once audits are fixed",
     "temporary_filters": [
       {
-        "item": "Open Ports",
-        "reason": "Redundant with Risky Open Ports",
-        "action": "Exclude",
-        "remove_after": "Audit produces only risky ports"
-      },
-      {
         "pattern": "*Windows Defender*",
         "reason": "Baseline feature, not a finding",
-        "action": "Exclude",
-        "remove_after": "Audit stops flagging Windows Defender"
+        "action": "Exclude"
       },
       {
         "item": "Share Permission Risk",
         "reason": "Redundant with File Share",
-        "action": "Exclude",
-        "remove_after": "Audit consolidates share findings"
+        "action": "Exclude"
       },
       {
         "item": "BitLocker Volume",
         "reason": "Redundant with BitLocker Encryption",
-        "action": "Exclude",
-        "remove_after": "Audit produces single BitLocker finding"
+        "action": "Exclude"
       },
       {
         "item": "BitLocker Encryption Summary",
         "reason": "Redundant with BitLocker Encryption",
-        "action": "Exclude",
-        "remove_after": "Audit produces single BitLocker finding"
+        "action": "Exclude"
       },
       {
         "item": "File Share",
         "condition": "value matches NETLOGON|SYSVOL",
         "reason": "Required DC shares flagged as risky",
-        "action": "Exclude when condition met",
-        "remove_after": "Audit recognizes DC shares as normal"
+        "action": "Exclude when condition met"
       },
       {
         "item": "Remote Desktop",
         "condition": "value matches Disabled",
         "reason": "Disabled RDP is a strength, not a risk",
-        "action": "Move to security strengths",
-        "remove_after": "Audit categorizes RDP disabled as strength"
+        "action": "Move to security strengths"
       },
       {
         "item": "Guest Account",
         "condition": "value matches Disabled",
         "reason": "Disabled Guest is a strength, not a risk",
-        "action": "Move to security strengths",
-        "remove_after": "Audit categorizes Guest disabled as strength"
+        "action": "Move to security strengths"
       }
     ]
   }
