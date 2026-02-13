@@ -8,6 +8,10 @@ output/*.html
 output/*.pdf
 output/*.log
 output/**/*.log
+output/M365_Assessment_*/
+
+# M365 Assessment - sensitive config (contains tenant IDs, app IDs, thumbprints)
+config/m365-assessment-config.json
 
 # Temporary files
 *.tmp
@@ -29,3 +33,6 @@ session_activity.log
 
 # HIBP API Configuration (contains sensitive API keys)
 config/hibp-api-config.json
+
+# Old/reference scripts (not part of the tool)
+M365-Assess-Consolidate-fixed.ps1
