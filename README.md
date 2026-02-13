@@ -1,32 +1,75 @@
 # BusinessNetworkAuditor
 
-Cross-platform IT assessment and dark web monitoring tool for Windows and macOS systems.
+PulseOne's unified IT assessment suite. Covers endpoint auditing, Microsoft 365 security, dark web breach monitoring, and multi-system reporting from a single launcher.
+
+## Quick Start
+
+```powershell
+# Run the main launcher (interactive menu)
+.\BusinessNetworkAuditor.ps1
+```
+
+This opens a menu with all assessment options. Select a number and follow the prompts.
 
 ## Features
 
+### Endpoint Auditing
+- Windows workstation and server assessment
+- macOS workstation assessment
 - System information, user accounts, software inventory, security settings
 - Server role detection (Domain Controller, DNS, DHCP, File Services)
 - Active Directory health and stale account detection
-- Dark web breach monitoring for email domains
 - Risk-based reporting (HIGH/MEDIUM/LOW/INFO)
-- Multi-system aggregation with HTML reports
+
+### M365 Security Assessment
+- Automated Microsoft 365 tenant security assessment
+- Runs ScubaGear (CISA baseline compliance) and Maester (configuration security tests)
+- Supports interactive and service principal (certificate) authentication
+- Auto-updates assessment modules to latest versions from PSGallery
+- Generates consolidated HTML report with all findings prioritized by severity
+- Assesses: Entra ID, Exchange Online, Defender, SharePoint, Teams, Power Platform
+- Configuration wizard handles all setup including Azure AD app registration
+
+### Dark Web Monitoring
+- Domain breach analysis using HIBP data
+- Timeline and impact assessment for compromised credentials
+
+### Reporting
+- Multi-system aggregation into single HTML reports
+- Individual markdown and JSON exports per assessment
+- Client-ready consolidated reports
 
 ## Usage
 
-### Local Execution
-```bash
-# Windows
+### Main Launcher
+```powershell
+.\BusinessNetworkAuditor.ps1
+```
+
+### Individual Tools
+
+```powershell
+# Windows endpoints
 .\src\WindowsWorkstationAuditor.ps1
 .\src\WindowsServerAuditor.ps1
 
 # macOS (admin privileges recommended)
 sudo ./src/macOSWorkstationAuditor.sh
+
+# M365 Security Assessment (standalone)
+.\Invoke-M365Assessment.ps1
+
+# Dark Web Check
+.\src\DarkWebChecker.ps1 -Domains "client.com,subsidiary.org"
+
+# Multi-System Aggregation
+.\src\NetworkAuditAggregator.ps1 -ClientName "Client Organization"
 ```
 
-### Web Deployment
+### Web Deployment (Remote Execution)
 
 **Production (stable):**
-```bash
+```powershell
 # Windows
 iex (irm https://raw.githubusercontent.com/pulseonetech/BusinessNetworkAuditor/main/WindowsWorkstationAuditor-Web.ps1)
 iex (irm https://raw.githubusercontent.com/pulseonetech/BusinessNetworkAuditor/main/WindowsServerAuditor-Web.ps1)
@@ -35,62 +78,40 @@ iex (irm https://raw.githubusercontent.com/pulseonetech/BusinessNetworkAuditor/m
 curl -s https://raw.githubusercontent.com/pulseonetech/BusinessNetworkAuditor/main/macOSWorkstationAuditor-Web.sh | sudo bash
 ```
 
-**Development (latest features, testing):**
-```bash
-# Windows
-iex (irm https://raw.githubusercontent.com/pulseonetech/BusinessNetworkAuditor/development/WindowsWorkstationAuditor-Web.ps1)
-iex (irm https://raw.githubusercontent.com/pulseonetech/BusinessNetworkAuditor/development/WindowsServerAuditor-Web.ps1)
-
-# macOS
-curl -s https://raw.githubusercontent.com/pulseonetech/BusinessNetworkAuditor/development/macOSWorkstationAuditor-Web.sh | sudo bash
-```
-
 **Output Location:**
 - Windows: `C:\Users\<Username>\WindowsAudit\`
 - macOS: `~/macOSAudit/`
 
-Reports include a markdown file (technical findings) and JSON file (raw data for aggregation).
+### M365 Assessment Setup
 
-### Dark Web Breach Analysis
-```powershell
-.\src\DarkWebChecker.ps1 -Domains "client.com,subsidiary.org"
-.\src\DarkWebChecker.ps1 -DemoMode
-```
+The M365 assessment has a built-in configuration wizard that walks through all setup steps. For service principal (automated) mode, you'll need:
 
-### Multi-System Aggregation
-```powershell
-# Collect JSON files from individual audits
-copy output\*_raw_data.json import\
+1. **Azure AD App Registration** with certificate authentication
+2. **API Permissions** (the wizard lists all required permissions)
+3. **Roles**: Global Reader + Teams Administrator (or Global Admin)
+4. **Power Platform**: One-time registration (automated by the wizard)
 
-# Generate consolidated HTML report
-.\src\NetworkAuditAggregator.ps1 -ClientName "Client Organization"
-```
-
-## Examples
-
-See `examples/` directory for sample reports:
-- [Windows Workstation](examples/Windows-Workstation-Example-Report.md)
-- [Windows Server](examples/Windows-Server-Example-Report.md)
-- [macOS Workstation](examples/macOS-Workstation-Example-Report.md)
-- [Aggregated HTML Report](examples/Aggregated-Report-Example.html) ([Preview](examples/Aggregated-Report-Screenshot.png))
+Run `.\Invoke-M365Assessment.ps1` and select Service Principal when prompted. The wizard handles everything.
 
 ## Requirements
 
-- **Windows**: 10/11 or Server 2016+, PowerShell 5.0+
+- **Windows**: 10/11 or Server 2016+, PowerShell 5.1+
 - **macOS**: 12+ (Monterey), admin privileges recommended
+- **M365 Assessment**: PowerShell 5.1 (ScubaGear) + PowerShell 7 recommended (Maester). Internet access for module installation.
 - **Web versions**: Built with `./Build-WebVersions.ps1`
-- **Dark Web Checker**: Internet connectivity, optional API key for enhanced results
+- **Dark Web Checker**: Internet connectivity, optional HIBP API key for enhanced results
 
 ## Output
 
 - **Markdown Report**: Technical findings with risk levels and recommendations
 - **JSON Export**: Complete data for aggregation and documentation
 - **HTML Report**: Client-ready aggregated report (via NetworkAuditAggregator)
+- **M365 Report**: Consolidated HTML with prioritized security findings, ScubaGear baseline reports, and Maester test results
 - **Dark Web Report**: Domain breach analysis with timeline and impact assessment
 
 ## Configuration
 
-Customize settings in configuration files:
+- `config/m365-assessment-config.json` - M365 assessment settings (generated by wizard)
 - `config/workstation-audit-config.json` - Windows workstation settings
 - `config/server-audit-config.json` - Windows server settings
 - `config/macos-audit-config.json` - macOS settings
