@@ -404,7 +404,11 @@ function Import-AuditData {
             }
             # Remove empty string category (audit tool bug) using multiline regex
             $JsonContent = $JsonContent -replace '(?s)"":\s*\{.*?"findings":\s*\[.*?\]\s*\},?\s*', ''
-            # Clean up trailing commas before closing braces
+            # Clean up consecutive commas (e.g. from skipped findings in macOS exporter)
+            while ($JsonContent -match ',\s*,') {
+                $JsonContent = $JsonContent -replace ',(\s*),', '$1,'
+            }
+            # Clean up trailing commas before closing braces/brackets
             $JsonContent = $JsonContent -replace ',(\s*[\]}])', '$1'
             $AuditData = $JsonContent | ConvertFrom-Json
             

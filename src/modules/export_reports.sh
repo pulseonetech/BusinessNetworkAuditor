@@ -72,12 +72,6 @@ EOF
     # Add all findings as JSON
     local first_finding=true
     for finding in "${ALL_FINDINGS[@]}"; do
-        if [[ "$first_finding" == true ]]; then
-            first_finding=false
-        else
-            echo "," >> "$json_file"
-        fi
-        
         # Parse JSON finding using native bash/sed/awk (no Python dependency)
         local category=$(echo "$finding" | sed -n 's/.*"category":"\([^"]*\)".*/\1/p' | head -1)
         local item=$(echo "$finding" | sed -n 's/.*"item":"\([^"]*\)".*/\1/p' | head -1)
@@ -95,6 +89,13 @@ EOF
         # Skip empty or malformed entries
         if [[ "$item" == "Unknown" && "$value" == "Unknown" ]]; then
             continue
+        fi
+
+        # Write comma separator before each finding except the first valid one
+        if [[ "$first_finding" == true ]]; then
+            first_finding=false
+        else
+            echo "," >> "$json_file"
         fi
 
         # Generate finding ID
