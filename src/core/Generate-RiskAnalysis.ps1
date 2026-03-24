@@ -82,6 +82,138 @@ function Generate-RiskAnalysis {
     }
 
     # ============================================================================
+    # Demote items to INFO level based on config
+    # ============================================================================
+    if ($ReportConfig.demote_to_info) {
+        foreach ($DemoteItem in $ReportConfig.demote_to_info) {
+            $ConsolidatedFindings | Where-Object { $_.Item -like "*$DemoteItem*" } | ForEach-Object {
+                if ($_.RiskLevel -ne "LOW") {
+                    Write-Verbose "Demoting $($_.Item) from $($_.RiskLevel) to LOW (Info)"
+                    $_.RiskLevel = "LOW"
+                }
+            }
+        }
+    }
+
+    # Demote items to MEDIUM level based on config
+    if ($ReportConfig.demote_to_medium) {
+        foreach ($DemoteItem in $ReportConfig.demote_to_medium) {
+            $ConsolidatedFindings | Where-Object { $_.Item -like "*$DemoteItem*" } | ForEach-Object {
+                if ($_.RiskLevel -eq "HIGH") {
+                    Write-Verbose "Demoting $($_.Item) from HIGH to MEDIUM"
+                    $_.RiskLevel = "MEDIUM"
+                }
+            }
+        }
+    }
+
+    # Promote items to HIGH level based on config
+    if ($ReportConfig.promote_to_high) {
+        foreach ($PromoteItem in $ReportConfig.promote_to_high) {
+            $ConsolidatedFindings | Where-Object { $_.Item -like "*$PromoteItem*" } | ForEach-Object {
+                if ($_.RiskLevel -eq "MEDIUM" -or $_.RiskLevel -eq "LOW") {
+                    Write-Verbose "Promoting $($_.Item) from $($_.RiskLevel) to HIGH"
+                    $_.RiskLevel = "HIGH"
+                }
+            }
+        }
+    }
+
+    # Exclude findings for servers based on config (e.g., BitLocker)
+    if ($ReportConfig.server_exclusions) {
+        $ConsolidatedFindings = $ConsolidatedFindings | Where-Object {
+            $dominated = $false
+            foreach ($Exclusion in $ReportConfig.server_exclusions) {
+                if ($_.Item -like "*$Exclusion*" -and $_.SystemType -like "*Server*") {
+                    Write-Verbose "Excluding $($_.Item) for server $($_.SystemName)"
+                    $dominated = $true
+                    break
+                }
+            }
+            -not $dominated
+        }
+    }
+
+    # Handle thresholds for specific findings
+    if ($ReportConfig.thresholds) {
+        # Application errors - only show if above threshold
+        if ($ReportConfig.thresholds.application_errors_min) {
+            $MinErrors = $ReportConfig.thresholds.application_errors_min
+            $ConsolidatedFindings = $ConsolidatedFindings | Where-Object {
+                if ($_.Item -like "*Application Error*" -or $_.Item -like "*Application Event*") {
+                    $Count = 0
+                    if ($_.Value -match "(\d+)") { $Count = [int]$Matches[1] }
+                    if ($_.Details -match "(\d+)") { $Count = [Math]::Max($Count, [int]$Matches[1]) }
+                    if ($Count -lt $MinErrors) {
+                        Write-Verbose "Excluding $($_.Item) - only $Count errors (threshold: $MinErrors)"
+                        return $false
+                    }
+                }
+                return $true
+            }
+        }
+
+        # System uptime - only show if above threshold (high uptime)
+        if ($ReportConfig.thresholds.system_uptime_days_min) {
+            $MinDays = $ReportConfig.thresholds.system_uptime_days_min
+            $ConsolidatedFindings = $ConsolidatedFindings | Where-Object {
+                if ($_.Item -like "*System Uptime*" -or $_.Item -like "*Uptime*") {
+                    $Days = 0
+                    if ($_.Value -match "(\d+)\s*day") { $Days = [int]$Matches[1] }
+                    if ($_.Details -match "(\d+)\s*day") { $Days = [Math]::Max($Days, [int]$Matches[1]) }
+                    if ($Days -lt $MinDays) {
+                        Write-Verbose "Excluding $($_.Item) - only $Days days (threshold: $MinDays)"
+                        return $false
+                    }
+                }
+                return $true
+            }
+        }
+
+        # Available Updates - demote unless above threshold
+        $UpdateThreshold = $ReportConfig.thresholds.available_updates
+        if ($UpdateThreshold) {
+            $ConsolidatedFindings | Where-Object { $_.Item -like "*Available Updates*" } | ForEach-Object {
+                $Count = 0
+                if ($_.Value -match "(\d+)") { $Count = [int]$Matches[1] }
+                if ($Count -lt $UpdateThreshold -and $_.RiskLevel -ne "LOW") {
+                    Write-Verbose "Demoting Available Updates ($Count < $UpdateThreshold threshold) to LOW"
+                    $_.RiskLevel = "LOW"
+                }
+            }
+        }
+    }
+
+    # Filter out RDP Disabled and Guest Account Disabled from risk items (they are strengths)
+    $ConsolidatedFindings = $ConsolidatedFindings | Where-Object {
+        $dominated = $false
+        if ($_.Item -like "*Remote Desktop*" -and $_.Value -like "*Disabled*") {
+            $dominated = $true
+        }
+        if ($_.Item -like "*Guest Account*" -and $_.Value -like "*Disabled*") {
+            $dominated = $true
+        }
+        -not $dominated
+    }
+
+    # Filter risky ports that are just default Windows ports
+    if ($ReportConfig.default_windows_ports) {
+        $DefaultPorts = $ReportConfig.default_windows_ports
+        $ConsolidatedFindings = $ConsolidatedFindings | Where-Object {
+            if ($_.Item -like "*Risky*Port*" -or $_.Item -like "*Open Port*") {
+                # Check if all ports mentioned are default ports
+                $PortNumbers = [regex]::Matches($_.Details, "\b(\d{2,5})\b") | ForEach-Object { [int]$_.Groups[1].Value }
+                $NonDefaultPorts = $PortNumbers | Where-Object { $_ -notin $DefaultPorts }
+                if ($NonDefaultPorts.Count -eq 0 -and $PortNumbers.Count -gt 0) {
+                    Write-Verbose "Excluding $($_.Item) - only default Windows ports detected"
+                    return $false
+                }
+            }
+            return $true
+        }
+    }
+
+    # ============================================================================
     # TECHNICAL DEBT: Filter band-aids loaded from config
     # See config/report-presentation.json "technical_debt" section for details
     # ============================================================================
@@ -146,7 +278,7 @@ function Generate-RiskAnalysis {
                 AffectedSystems = ($AffectedSystems.SystemName -join ", ")
                 Severity = "Moderate"
             }
-        } | Sort-Object AffectedCount -Descending | Select-Object -First 10
+        } | Sort-Object AffectedCount -Descending | Select-Object -First 15
 
     $RiskAnalysis.MediumRiskFindings = $MediumRiskItems
     
@@ -191,9 +323,10 @@ function Generate-RiskAnalysis {
     
     # Generate Systems Snapshot (similar to Computer Snapshot table)
     # Exclude dark web checks - only include actual computer systems
+    # Use consolidated (filtered) findings for accurate grading
     $ActualSystems = $ImportedData.Systems | Where-Object { $_.SystemType -ne "Breach Monitor" }
     foreach ($System in $ActualSystems) {
-        $SystemFindings = $ImportedData.AllFindings | Where-Object { $_.SystemName -eq $System.ComputerName }
+        $SystemFindings = $ConsolidatedFindings | Where-Object { $_.SystemName -eq $System.ComputerName }
         
         # Calculate grades for each category
         $Grades = @{
@@ -515,6 +648,12 @@ function Format-FindingDetails {
         }
     }
 
+    # Special handling for findings where Value is more informative than Details
+    if ($Finding.Item -match "Configuration Risk|Server Role" -and $Finding.Value) {
+        # Include both the specific role/issue and the generic guidance
+        return "$($Finding.SystemName): $($Finding.Value)"
+    }
+
     # No config or processor, use Details as-is
     return $Finding.Details
 }
@@ -590,15 +729,26 @@ function Format-MultiSystemDetails {
     # Build per-system details based on finding type
     $SystemDetails = @()
 
+    # Helper to apply display limits
+    $MaxSystems = 5
+    if ($ReportConfig.display_limits -and $ReportConfig.display_limits.max_systems_per_finding) {
+        $MaxSystems = $ReportConfig.display_limits.max_systems_per_finding
+    }
+    $ShowSummary = $ReportConfig.display_limits.show_summary_when_exceeded
+
     # Special handling for BitLocker - add context about total systems
     if ($ItemName -match "BitLocker.*Encryption" -and -not ($ItemName -match "Summary|Volume")) {
         $TotalSystems = ($ImportedData.Systems | Where-Object { $_.SystemType -ne "Breach Monitor" }).Count
         $UnencryptedCount = $Findings.Count
         $SystemDetails += "WARNING: $UnencryptedCount of $TotalSystems systems lack full disk encryption"
 
-        # Still list individual systems
-        foreach ($F in $Findings) {
+        # Still list individual systems (limited)
+        $SystemList = $Findings | Select-Object -First $MaxSystems
+        foreach ($F in $SystemList) {
             $SystemDetails += "$($F.SystemName) (No disk encryption)"
+        }
+        if ($Findings.Count -gt $MaxSystems -and $ShowSummary) {
+            $SystemDetails += "... and $($Findings.Count - $MaxSystems) more systems"
         }
 
         return ($SystemDetails -join "|||")
@@ -619,7 +769,13 @@ function Format-MultiSystemDetails {
                 $SystemDetails += $Detail
             }
         }
-        # Return early since we've already built the details
+        # Apply display limit
+        if ($SystemDetails.Count -gt $MaxSystems -and $ShowSummary) {
+            $ExcessCount = $SystemDetails.Count - $MaxSystems
+            $LimitedDetails = $SystemDetails | Select-Object -First $MaxSystems
+            $LimitedDetails += "... and $ExcessCount more systems"
+            $SystemDetails = $LimitedDetails
+        }
         return ($SystemDetails -join "|||")
     }
 
@@ -650,11 +806,13 @@ function Format-MultiSystemDetails {
                 }
             }
             "Open Ports|Risky Open Ports" {
-                # Show port numbers
-                if ($F.Value) {
-                    $Detail = "$SystemName (Ports: $($F.Value))"
+                # Show actual port numbers - Details field has the list, Value has just a count
+                if ($F.Details -match 'Open\s*ports?:\s*(.+)') {
+                    $Detail = "$SystemName ($($Matches[1]))"
                 } elseif ($F.Details -match 'Ports?:\s*(.+)') {
-                    $Detail = "$SystemName (Ports: $($Matches[1]))"
+                    $Detail = "$SystemName ($($Matches[1]))"
+                } elseif ($F.Value -and $F.Value -notmatch 'detected$') {
+                    $Detail = "$SystemName (Ports: $($F.Value))"
                 } else {
                     $Detail = "$SystemName"
                 }
@@ -746,6 +904,14 @@ function Format-MultiSystemDetails {
         $SystemDetails += $Detail
     }
 
+    # Apply display limits (variables defined at top of function)
+    if ($SystemDetails.Count -gt $MaxSystems -and $ShowSummary) {
+        $ExcessCount = $SystemDetails.Count - $MaxSystems
+        $LimitedDetails = $SystemDetails | Select-Object -First $MaxSystems
+        $LimitedDetails += "... and $ExcessCount more systems"
+        $SystemDetails = $LimitedDetails
+    }
+
     # Join with special delimiter for HTML formatting
     return ($SystemDetails -join "|||")
 }
@@ -759,6 +925,15 @@ function Get-DefaultRecommendation {
         [PSCustomObject]$Finding,
         [PSCustomObject]$ReportConfig
     )
+
+    # Check for config-based recommendations first
+    if ($ReportConfig -and $ReportConfig.recommendations) {
+        foreach ($RecKey in $ReportConfig.recommendations.PSObject.Properties.Name) {
+            if ($Finding.Item -like "*$RecKey*") {
+                return $ReportConfig.recommendations.$RecKey
+            }
+        }
+    }
 
     # If config available, try to use processor
     if ($ReportConfig) {
@@ -789,6 +964,16 @@ function Remove-RedundantFindings {
 
     $Filtered = $AllFindings | Where-Object {
         $Finding = $_
+
+        # Check omit_from_report list first
+        if ($ReportConfig.omit_from_report) {
+            foreach ($OmitItem in $ReportConfig.omit_from_report) {
+                if ($Finding.Item -like "*$OmitItem*") {
+                    Write-Verbose "Omitting $($Finding.Item) - matches omit_from_report: $OmitItem"
+                    return $false
+                }
+            }
+        }
 
         # Check if explicitly excluded (old redundancy rules)
         if (Test-FindingExcluded -Finding $Finding -Config $ReportConfig) {
