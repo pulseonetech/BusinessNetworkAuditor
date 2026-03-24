@@ -5,7 +5,7 @@
         "CrowdStrike": ["CSAgent", "CSFalconService", "CSFalconContainer"],
         "CarbonBlack": ["cb", "CarbonBlack", "RepMgr", "RepUtils", "RepUx"],
         "Cortex XDR": ["cytool", "cyserver", "CyveraService"],
-        "McAfee": ["mcshield", "mfemms", "mfevtps", "McCSPServiceHost", "masvc"],
+        "McAfee": ["mcshield", "mfemms", "mfevtp", "mfevtps", "mfefire", "McCSPServiceHost", "mccspsvc", "masvc", "McAPExe", "McAWFwk"],
         "Symantec": ["ccSvcHst", "NortonSecurity", "navapsvc", "rtvscan", "savroam"],
         "Trend Micro": ["tmbmsrv", "tmproxy", "tmlisten", "PccNTMon", "TmListen"],
         "Kaspersky": ["avp", "avpui", "klnagent", "ksde", "kavfs"],
